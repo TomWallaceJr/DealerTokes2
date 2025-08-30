@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import SignOutButton from "@/components/SignOutButton";
+import BackButton from "@/components/BackButton";
 import Link from "next/link";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -18,7 +19,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
             {/* Only show Sign out if logged in; no Sign in / Create here */}
             <div className="flex gap-2">
-              {session ? <SignOutButton /> : null}
+              {session ? <><SignOutButton /> <BackButton /> </>: null}
             </div>
           </header>
           <main className="space-y-6">{children}</main>

@@ -9,16 +9,13 @@ const CreateShift = z.object({
   casino: z.string().min(1),
   hours: z.number().positive(),
   tokesCash: z.number().int().nonnegative().default(0),
-  tokesCards: z.number().int().nonnegative().default(0),
-  tokesChips: z.number().int().nonnegative().default(0),
-  tokesOther: z.number().int().nonnegative().default(0),
+  downs: z.number().int().nonnegative().default(0),
   notes: z.string().optional(),
 });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const user = await prisma.user.findUnique({ where: { email: session.user.email! } });
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -40,7 +37,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const user = await prisma.user.findUnique({ where: { email: session.user.email! } });
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -50,6 +46,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   const d = parsed.data;
+
   const shift = await prisma.shift.create({
     data: {
       userId: user.id,
@@ -57,9 +54,7 @@ export async function POST(req: NextRequest) {
       casino: d.casino,
       hours: d.hours,
       tokesCash: d.tokesCash ?? 0,
-      tokesCards: d.tokesCards ?? 0,
-      tokesChips: d.tokesChips ?? 0,
-      tokesOther: d.tokesOther ?? 0,
+      downs: d.downs ?? 0,
       notes: d.notes,
     },
   });

@@ -6,13 +6,13 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
   const [casino, setCasino] = useState<string>("");
   const [hours, setHours] = useState<number>(8);
   const [tokesCash, setTokesCash] = useState<number>(0);
-  const [tokesCards, setTokesCards] = useState<number>(0);
-  const [tokesChips, setTokesChips] = useState<number>(0);
-  const [tokesOther, setTokesOther] = useState<number>(0);
+  const [downs, setDowns] = useState<number>(0);
   const [notes, setNotes] = useState<string>("");
   const [saving, setSaving] = useState<boolean>(false);
-  const total = tokesCash + tokesCards + tokesChips + tokesOther;
+
+  const total = tokesCash;
   const hourly = hours > 0 ? total / hours : 0;
+  const perDown = downs > 0 ? total / downs : 0;
 
   async function save() {
     setSaving(true);
@@ -25,9 +25,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
           casino,
           hours,
           tokesCash,
-          tokesCards,
-          tokesChips,
-          tokesOther,
+          downs,
           notes: notes || undefined,
         }),
       });
@@ -35,9 +33,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
       setCasino("");
       setHours(8);
       setTokesCash(0);
-      setTokesCards(0);
-      setTokesChips(0);
-      setTokesOther(0);
+      setDowns(0);
       setNotes("");
       onSaved?.();
     } finally {
@@ -60,32 +56,31 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
           <label className="text-xs text-zinc-400">Hours</label>
           <input className="input" type="number" step="0.25" value={hours} onChange={(e) => setHours(parseFloat(e.target.value))} />
         </div>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div>
-          <label className="text-xs text-zinc-400">Cash</label>
+          <label className="text-xs text-zinc-400">Downs</label>
+          <input className="input" type="number" step="1" min="0" value={downs} onChange={(e) => setDowns(parseInt(e.target.value || "0"))} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-zinc-400">Tokes ($)</label>
           <input className="input" type="number" value={tokesCash} onChange={(e) => setTokesCash(parseInt(e.target.value || "0"))} />
         </div>
-        <div>
-          <label className="text-xs text-zinc-400">Cards</label>
-          <input className="input" type="number" value={tokesCards} onChange={(e) => setTokesCards(parseInt(e.target.value || "0"))} />
-        </div>
-        <div>
-          <label className="text-xs text-zinc-400">Chips</label>
-          <input className="input" type="number" value={tokesChips} onChange={(e) => setTokesChips(parseInt(e.target.value || "0"))} />
-        </div>
-        <div>
-          <label className="text-xs text-zinc-400">Other</label>
-          <input className="input" type="number" value={tokesOther} onChange={(e) => setTokesOther(parseInt(e.target.value || "0"))} />
-        </div>
       </div>
+
       <div>
         <label className="text-xs text-zinc-400">Notes</label>
         <textarea className="textarea" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
-      <div className="flex items-center justify-between text-sm text-zinc-300">
-        <div>Total: ${"{"}total{"}"} | Hourly: ${"{"}hourly.toFixed(2){"}"}</div>
-        <button className="btn" onClick={save} disabled={saving || !casino || hours <= 0}>{saving ? "Saving..." : "Save Shift"}</button>
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-zinc-300">
+        <div>
+          Total: ${total} • $/h: {hourly.toFixed(2)} • $/down: {perDown.toFixed(2)}
+        </div>
+        <button className="btn w-full sm:w-auto" onClick={save} disabled={saving || !casino || hours <= 0}>
+          {saving ? "Saving..." : "Save Shift"}
+        </button>
       </div>
     </div>
   );
