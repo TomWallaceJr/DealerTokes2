@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ensureDemoUser } from "@/lib/demoUser";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { z } from "zod";
 
 const CreateShift = z.object({
@@ -15,7 +16,12 @@ const CreateShift = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const user = await ensureDemoUser();
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const user = await prisma.user.findUnique({ where: { email: session.user.email! } });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
@@ -27,16 +33,17 @@ export async function GET(req: NextRequest) {
     if (to) where.date.lte = new Date(to);
   }
 
-  const shifts = await prisma.shift.findMany({
-    where,
-    orderBy: { date: "desc" },
-  });
-
+  const shifts = await prisma.shift.findMany({ where, orderBy: { date: "desc" } });
   return NextResponse.json(shifts);
 }
 
 export async function POST(req: NextRequest) {
-  const user = await ensureDemoUser();
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const user = await prisma.user.findUnique({ where: { email: session.user.email! } });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json();
   const parsed = CreateShift.safeParse(body);
   if (!parsed.success) {

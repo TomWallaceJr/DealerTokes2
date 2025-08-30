@@ -14,13 +14,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.10.0",
     "@prisma/client": "latest",
+    "bcryptjs": "^3.0.2",
     "clsx": "latest",
     "date-fns": "latest",
     "next": "latest",
+    "next-auth": "^4.24.11",
     "react": "latest",
     "react-dom": "latest",
-    "zod": "latest"
+    "zod": "^4.1.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.12",

@@ -1,22 +1,27 @@
-import "./globals.css";
-import type { Metadata } from "next";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import SignOutButton from "@/components/SignOutButton";
+import Link from "next/link";
 
-export const metadata: Metadata = {
-  title: "DealerTokes",
-  description: "Track your tokes, hours, and hourly rate—fast.",
-};
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const session = await getServerSession(authOptions);
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className="min-h-screen">
         <div className="mx-auto max-w-4xl p-4">
-          <header className="pb-6">
-            <h1 className="text-2xl font-semibold">DealerTokes</h1>
-            <p className="text-sm text-zinc-400">Simple, fast income tracking for poker dealers.</p>
+        <header className="pb-6 flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold">DealerTokes</h1>
+              <p className="text-sm text-zinc-400">Track your tokes and hours.</p>
+            </div>
+
+            {/* Only show Sign out if logged in; no Sign in / Create here */}
+            <div className="flex gap-2">
+              {session ? <SignOutButton /> : null}
+            </div>
           </header>
           <main className="space-y-6">{children}</main>
-          <footer className="pt-8 text-xs text-zinc-500">© {new Date().getFullYear()} DealerTokes</footer>
         </div>
       </body>
     </html>
