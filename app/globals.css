@@ -1,26 +1,23 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* app/globals.css */
+@import "tailwindcss";
 
-:root {
-  --bg: 15 15 15;
-  --card: 24 24 27;
-  --muted: 161 161 170;
+@layer base {
+  html, body { height: 100%; }
+  /* lighter than zinc-950: */
+  body { @apply bg-slate-900 text-slate-100 antialiased; }
 }
 
-body {
-  background-color: rgb(var(--bg));
-  color: white;
-}
+@layer components {
+  /* centered container */
+  .container-app { @apply mx-auto w-full max-w-4xl px-4 sm:px-6 md:px-8; }
 
-.card {
-  @apply rounded-2xl p-5 shadow-md bg-zinc-900/60 border border-zinc-800;
-}
+  /* lighter cards/borders */
+  .card     { @apply rounded-2xl border border-slate-700 bg-slate-800/60 p-4 shadow-sm; }
 
-.btn {
-  @apply inline-flex items-center justify-center rounded-xl border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-800 transition;
-}
+  /* buttons: add subtle fill by default */
+  .btn      { @apply inline-flex items-center justify-center rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium transition hover:bg-slate-700 active:scale-[.99]; }
 
-.input, .select, .textarea {
-  @apply w-full rounded-xl bg-zinc-900/50 border border-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-400;
+  /* inputs/textarea: lighter fill + clearer focus ring */
+  .input    { @apply w-full rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500; }
+  .textarea { @apply w-full rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500; }
 }

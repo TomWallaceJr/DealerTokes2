@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import SignOutButton from "@/components/SignOutButton";
 import BackButton from "@/components/BackButton";
 import Link from "next/link";
+import "./globals.css";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -10,7 +11,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body className="min-h-screen">
-        <div className="mx-auto max-w-4xl p-4">
+        <div className="container-app py-4">
         <header className="pb-6 flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-semibold">DealerTokes</h1>

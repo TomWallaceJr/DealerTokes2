@@ -34,7 +34,7 @@ export default function ShiftList() {
           const perHour = s.hours > 0 ? total / s.hours : 0;
           const perDown = s.downs > 0 ? total / s.downs : 0;
           return (
-            <div key={s.id} className="rounded-xl border border-zinc-800 p-3">
+            <div key={s.id} className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3">
               <div className="flex flex-wrap justify-between gap-2 text-sm">
                 <div>
                   <div className="font-medium">

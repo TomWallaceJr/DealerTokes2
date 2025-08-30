@@ -50,8 +50,9 @@ export default function StatsPage() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Stats</h2>
+      <h2 className="text-xl font-semibold text-center sm:text-left">Stats</h2>
 
+      {/* KPI cards */}
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="card">
           <div className="text-xs text-zinc-400">Total Tokes</div>
@@ -69,16 +70,20 @@ export default function StatsPage() {
         </div>
       </div>
 
+      {/* By Casino with bordered rows */}
       <div className="card">
         <div className="text-sm font-medium mb-2">By Casino (sorted by $/h)</div>
-        <div className="text-sm divide-y divide-zinc-800">
+        <div className="grid gap-2">
           {stats.casinoRows.length === 0 && (
             <div className="text-sm text-zinc-400">No data yet.</div>
           )}
           {stats.casinoRows.map((r) => (
-            <div key={r.casino} className="py-2 flex justify-between">
-              <div>{r.casino}</div>
-              <div className="text-zinc-400">
+            <div
+              key={r.casino}
+              className="rounded-xl border border-slate-700 bg-slate-800/50 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"
+            >
+              <div className="font-medium">{r.casino}</div>
+              <div className="text-zinc-400 text-sm">
                 ${money(r.total)} • ${r.hourly.toFixed(2)}/h • ${r.perDown.toFixed(2)}/down
               </div>
             </div>
