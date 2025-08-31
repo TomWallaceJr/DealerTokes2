@@ -1,6 +1,7 @@
 // components/ShiftList.tsx
 'use client';
 
+import { dateUTC } from '@/lib/date';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -173,7 +174,7 @@ export default function ShiftList() {
                   <div className="flex flex-wrap items-start justify-between gap-2 text-sm">
                     <div>
                       <div className="font-medium text-slate-900">
-                        {new Date(s.date).toLocaleDateString()} • {s.casino}
+                        {dateUTC(s.date)} • {s.casino}
                       </div>
                       <div className="text-slate-600">
                         {num(s.hours, 2)}h, {s.downs} downs • {money(total)} total • ${num(perHour)}

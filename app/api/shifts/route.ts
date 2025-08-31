@@ -1,48 +1,52 @@
+// app/api/shifts/route.ts
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { NextResponse } from 'next/server';
 
-const CreateShift = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
-  casino: z.string().min(1),
-
-  // raw inputs
-  clockIn: z.string().regex(/^\d{2}:\d{2}$/), // "HH:MM" 00..23 : 00..59 (UI already snaps to 15s)
-  clockOut: z.string().regex(/^\d{2}:\d{2}$/),
-
-  tokesCash: z.number().int().nonnegative().default(0),
-  downs: z.number().int().nonnegative().default(0),
-
-  // keep but default to 0 (MVP hides these)
-  tournamentDowns: z.number().int().nonnegative().default(0).optional(),
-  tournamentRatePerDown: z.number().nonnegative().default(0).optional(),
-  hourlyRate: z.number().nonnegative().default(0).optional(),
-
-  notes: z.string().optional(),
-});
-
-// helpers
-function toMinutes(hhmm: string): number {
-  const [hh, mm] = hhmm.split(':').map(Number);
-  return hh * 60 + mm;
+/** "YYYY-MM-DD" → Date at UTC midnight */
+function ymdToUTCDate(ymd: unknown): Date {
+  if (typeof ymd !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+    throw new Error('Invalid date format (expected YYYY-MM-DD)');
+  }
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
 }
-function combine(dateStr: string, minutes: number): Date {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
-  dt.setMinutes(minutes);
-  return dt;
+
+/** Parse "HH:MM" → { h, m } or throw */
+function parseHHMM(v: unknown): { h: number; m: number } {
+  if (typeof v !== 'string' || !/^\d{2}:\d{2}$/.test(v)) {
+    throw new Error('Time must be HH:MM');
+  }
+  const [h, m] = v.split(':').map(Number);
+  if (h < 0 || h > 23 || m < 0 || m > 59) throw new Error('Time out of range');
+  return { h, m };
 }
-function roundQuarterHours(hours: number) {
-  return Math.round(hours * 4) / 4;
+
+/** Build a UTC DateTime from a UTC date (midnight) + "HH:MM" */
+function datePlusTimeUTC(baseUTCDate: Date, hhmm: string): Date {
+  const { h, m } = parseHHMM(hhmm);
+  return new Date(
+    Date.UTC(
+      baseUTCDate.getUTCFullYear(),
+      baseUTCDate.getUTCMonth(),
+      baseUTCDate.getUTCDate(),
+      h,
+      m,
+    ),
+  );
+}
+
+/** Hours (rounded to nearest 0.25) between two DateTimes (UTC) */
+function hoursBetweenRoundQuarter(start: Date, end: Date): number {
+  const ms = end.getTime() - start.getTime();
+  const h = ms / 3_600_000;
+  return Math.round(h * 4) / 4;
 }
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
 
@@ -58,59 +62,46 @@ export async function GET(req: Request) {
     ? dowRaw
         .split(',')
         .map((s) => Number(s))
-        .filter((n) => Number.isInteger(n))
+        .filter(Number.isInteger)
     : [];
   const casinos = searchParams
     .getAll('casino')
     .map((s) => s.trim())
     .filter(Boolean);
 
-  // base DB where (user + casino + optional date range)
   const where: any = { userId: session.user.id };
   if (casinos.length) where.casino = { in: casinos };
 
-  // If year is present, we can push a proper DB date range (month optional)
   if (year) {
     const y = Number(year);
     if (!Number.isNaN(y)) {
       if (month) {
-        const m = Number(month) - 1; // JS months 0..11
+        const m = Number(month) - 1;
         if (m >= 0 && m <= 11) {
-          const start = new Date(Date.UTC(y, m, 1));
-          const end = new Date(Date.UTC(y, m + 1, 1));
-          where.date = { gte: start, lt: end };
+          where.date = { gte: new Date(Date.UTC(y, m, 1)), lt: new Date(Date.UTC(y, m + 1, 1)) };
         }
       } else {
-        const start = new Date(Date.UTC(y, 0, 1));
-        const end = new Date(Date.UTC(y + 1, 0, 1));
-        where.date = { gte: start, lt: end };
+        where.date = { gte: new Date(Date.UTC(y, 0, 1)), lt: new Date(Date.UTC(y + 1, 0, 1)) };
       }
     }
   }
 
-  // Pull a superset from DB (already filtered by user/casino/(year,month?))
   const superset = await prisma.shift.findMany({
     where,
     orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
   });
 
-  // In-memory filters that Prisma can’t do directly (day-of-week and "month only")
+  // In-memory DOW and "month across all years" filters
   const filtered = superset.filter((s) => {
-    const d = new Date(s.date);
-
-    // If user chose a month WITHOUT a year, filter by month here
+    const d = new Date(s.date); // stored at UTC midnight
     if (!year && month) {
       const m = Number(month);
       if (!Number.isNaN(m) && d.getUTCMonth() + 1 !== m) return false;
     }
-
-    // Day-of-week filter. NOTE: using UTC to match date stored at UTC midnight.
-    // If your stored date is local-midnight, swap to d.getDay() instead.
     if (dows.length) {
-      const day = d.getUTCDay(); // 0=Sun .. 6=Sat
+      const day = d.getUTCDay(); // 0..6, UTC
       if (!dows.includes(day)) return false;
     }
-
     return true;
   });
 
@@ -121,54 +112,81 @@ export async function GET(req: Request) {
   return NextResponse.json({ items, total, limit, offset, hasMore });
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const user = await prisma.user.findUnique({ where: { email: session.user.email! } });
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = await req.json();
-  const parsed = CreateShift.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
-  const d = parsed.data;
-
-  const startMin = toMinutes(d.clockIn);
-  const endMin0 = toMinutes(d.clockOut);
-  let endMin = endMin0;
-  let overnight = false;
-  if (endMin <= startMin) {
-    // overnight into next day
-    endMin += 24 * 60;
-    overnight = true;
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const clockIn = combine(d.date, startMin);
-  const clockOut = combine(d.date, endMin);
-  if (overnight) clockOut.setDate(clockOut.getDate() + 0); // already rolled via +24h minutes
+  const { date, casino, clockIn, clockOut, tokesCash, downs, notes } = body ?? {};
+  if (!date) return NextResponse.json({ error: 'date is required' }, { status: 400 });
+  if (typeof casino !== 'string' || !casino.trim()) {
+    return NextResponse.json({ error: 'casino is required' }, { status: 400 });
+  }
 
-  const hours = roundQuarterHours((endMin - startMin) / 60);
+  // Normalize date + times
+  let dateUtc: Date;
+  try {
+    dateUtc = ymdToUTCDate(date); // UTC midnight
+  } catch {
+    return NextResponse.json({ error: 'Invalid date (YYYY-MM-DD)' }, { status: 400 });
+  }
 
-  const shift = await prisma.shift.create({
+  let inDT: Date, outDT: Date;
+  try {
+    inDT = datePlusTimeUTC(dateUtc, clockIn);
+    outDT = datePlusTimeUTC(dateUtc, clockOut);
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? 'Invalid time(s)' }, { status: 400 });
+  }
+
+  // Overnight handling: if out ≤ in, move out to next day (still counts for the selected date)
+  if (outDT <= inDT) {
+    outDT = new Date(
+      Date.UTC(
+        dateUtc.getUTCFullYear(),
+        dateUtc.getUTCMonth(),
+        dateUtc.getUTCDate() + 1,
+        outDT.getUTCHours(),
+        outDT.getUTCMinutes(),
+      ),
+    );
+  }
+
+  const hours = hoursBetweenRoundQuarter(inDT, outDT);
+  if (hours <= 0)
+    return NextResponse.json({ error: 'Computed hours must be > 0' }, { status: 400 });
+
+  const row = await prisma.shift.create({
     data: {
-      userId: user.id,
-      date: new Date(d.date), // stays the clock-in date
-      casino: d.casino,
-
+      userId: session.user.id,
+      date: dateUtc, // ✅ stored as UTC midnight
+      casino: casino.trim(),
+      clockIn: inDT, // ✅ stored as DateTime
+      clockOut: outDT, // ✅ stored as DateTime
       hours,
-      tokesCash: d.tokesCash ?? 0,
-      downs: d.downs ?? 0,
-
-      tournamentDowns: d.tournamentDowns ?? 0,
-      tournamentRatePerDown: d.tournamentRatePerDown ?? 0,
-      hourlyRate: d.hourlyRate ?? 0,
-
-      clockIn,
-      clockOut,
-
-      notes: d.notes,
+      tokesCash: Number(tokesCash ?? 0),
+      downs: Number(downs ?? 0),
+      notes: typeof notes === 'string' && notes.trim() ? notes : null,
+    },
+    select: {
+      id: true,
+      date: true,
+      casino: true,
+      clockIn: true,
+      clockOut: true,
+      hours: true,
+      tokesCash: true,
+      downs: true,
+      notes: true,
+      createdAt: true,
     },
   });
-  return NextResponse.json(shift, { status: 201 });
+
+  return NextResponse.json(row, { status: 201 });
 }

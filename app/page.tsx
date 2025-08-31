@@ -1,4 +1,5 @@
 // app/page.tsx
+import CalendarPicker from '@/components/CalenderPicker';
 import DemoSignInButton from '@/components/DemoSignInButton';
 import HomeQuickActions from '@/components/HomeQuickActions';
 import { authOptions } from '@/lib/auth';
@@ -127,6 +128,7 @@ export default async function HomePage() {
     <main className="space-y-6">
       <h1 className="text-2xl font-semibold text-slate-900">Hello {userName}!</h1>
       <HomeQuickActions />
+      <CalendarPicker />
     </main>
   );
 }
