@@ -1,5 +1,6 @@
 // components/ShiftForm.tsx
 'use client';
+
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -9,22 +10,23 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [casino, setCasino] = useState<string>('');
 
-  // Native time inputs (mobile shows wheel/scroller)
-  const [clockIn, setClockIn] = useState<string>(''); // "HH:MM" (24h)
-  const [clockOut, setClockOut] = useState<string>(''); // "HH:MM"
+  // Times (24h "HH:MM")
+  const [clockIn, setClockIn] = useState<string>('');
+  const [clockOut, setClockOut] = useState<string>('');
 
-  // Derived hours (read-only)
+  // Derived
   const [hours, setHours] = useState<number>(0);
 
   // MVP fields
-  const [downs, setDowns] = useState<number>(0); // Cash Downs
-  const [tokesCashStr, setTokesCashStr] = useState<string>('0'); // Cash Tokes (string for clear-on-focus)
+  const [downs, setDowns] = useState<number>(0);
+  const [tokesCashStr, setTokesCashStr] = useState<string>('0');
 
   const [notes, setNotes] = useState<string>('');
-  const [saving, setSaving] = useState<boolean>(false);
   const [rooms, setRooms] = useState<string[]>([]);
+  const [saving, setSaving] = useState<boolean>(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  // Load previously used rooms (per user)
+  // Load previously used rooms
   useEffect(() => {
     (async () => {
       try {
@@ -32,18 +34,21 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
         if (!res.ok) return;
         const data = await res.json();
         if (Array.isArray(data.rooms)) setRooms(data.rooms);
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     })();
   }, []);
 
   // Helpers
   const money = (n: number) => n.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+
   const intFrom = (s: string) => {
     const n = parseInt(s || '0', 10);
     return Number.isFinite(n) ? n : 0;
   };
 
-  // Parse "HH:MM" -> minutes past midnight
+  // "HH:MM" -> minutes
   function toMinutes(hhmm: string): number | null {
     if (!/^\d{2}:\d{2}$/.test(hhmm)) return null;
     const [hh, mm] = hhmm.split(':').map(Number);
@@ -51,7 +56,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
     return hh * 60 + mm;
   }
 
-  // Snap any time string to nearest 15 minutes (00/15/30/45)
+  // Snap to 15-min increments
   function normalizeTimeQuarter(hhmm: string): string {
     if (!/^\d{2}:\d{2}$/.test(hhmm)) return '';
     let [hh, mm] = hhmm.split(':').map((v) => parseInt(v, 10));
@@ -61,26 +66,23 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
       hh = (hh + 1) % 24;
       snapped = 0;
     }
-    const HH = String(hh).padStart(2, '0');
-    const MM = String(snapped).padStart(2, '0');
-    return `${HH}:${MM}`;
+    return `${String(hh).padStart(2, '0')}:${String(snapped).padStart(2, '0')}`;
   }
 
-  // Auto-calc Hours Worked when times change (overnight supported; shift belongs to selected date)
+  // Auto-calc hours
   useEffect(() => {
-    const start = toMinutes(clockIn);
-    const end = toMinutes(clockOut);
-    if (start == null || end == null) {
+    const s = toMinutes(clockIn);
+    const e = toMinutes(clockOut);
+    if (s == null || e == null) {
       setHours(0);
       return;
     }
-    let duration = end - start;
-    if (duration <= 0) duration += 24 * 60; // if out ≤ in, treat as next day
-    const h = duration / 60;
-    setHours(Math.round(h * 4) / 4); // round to nearest 0.25h
+    let dur = e - s;
+    if (dur <= 0) dur += 24 * 60; // overnight
+    setHours(Math.round((dur / 60) * 4) / 4); // nearest 0.25h
   }, [clockIn, clockOut]);
 
-  // Cash Tokes clear-on-focus UX
+  // Cash Tokes UX
   const clearOnFocus = (value: string, setter: (v: string) => void) => () => {
     if (value === '0') setter('');
   };
@@ -88,26 +90,42 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
     if (value.trim() === '') setter('0');
   };
 
-  // Preview metrics (cash tokes only for MVP)
   const tokesCash = intFrom(tokesCashStr);
   const perHour = hours > 0 ? tokesCash / hours : 0;
   const perDown = downs > 0 ? tokesCash / downs : 0;
 
+  function validate(): string | null {
+    if (!casino.trim()) return 'Enter a casino/room.';
+    if (!clockIn) return 'Select a valid Clock In time.';
+    if (!clockOut) return 'Select a valid Clocked Out time.';
+    const s = toMinutes(clockIn);
+    const e = toMinutes(clockOut);
+    if (s == null || e == null) return 'Times must be HH:MM in 15-minute increments.';
+    if (hours <= 0) return 'Hours must be greater than 0 (check your times).';
+    if (downs < 0) return 'Cash Downs cannot be negative.';
+    if (tokesCash < 0) return 'Cash Tokes cannot be negative.';
+    return null;
+  }
+
   async function save() {
-    if (!casino.trim() || !clockIn || !clockOut || hours <= 0) {
-      alert('Please select valid Clock In/Out times and enter a Casino.');
-      return;
+    setFormError(null);
+
+    const v = validate();
+    if (v) {
+      setFormError(v);
+      return; // stay on page
     }
+
     setSaving(true);
     try {
       const payload = {
         date,
         casino: casino.trim(),
-        clockIn, // "HH:MM"
-        clockOut, // "HH:MM"
-        hours, // derived (server will also compute)
-        tokesCash, // int ($)
-        downs, // int
+        clockIn,
+        clockOut,
+        hours,
+        tokesCash,
+        downs,
         notes: notes || undefined,
       };
 
@@ -116,25 +134,29 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Save failed');
 
-      const c = casino.trim();
-      if (c && !rooms.includes(c)) setRooms((p) => [...p, c].sort((a, b) => a.localeCompare(b)));
+      if (!res.ok) {
+        let msg = 'Save failed. Please try again.';
+        try {
+          const data = await res.json();
+          if (typeof data?.error === 'string') msg = data.error;
+        } catch {}
+        setFormError(msg);
+        return; // stay on page
+      }
 
-      // reset (keep date)
-      setCasino('');
-      setClockIn('');
-      setClockOut('');
-      setDowns(0);
-      setTokesCashStr('0');
-      setNotes('');
+      // Success → optional callback then go home
       onSaved?.();
+      router.push('/');
+    } catch {
+      setFormError('Network error while saving. Please try again.');
     } finally {
       setSaving(false);
     }
   }
 
-  const saveDisabled = saving || !casino.trim() || !clockIn || !clockOut || hours <= 0;
+  // Only disable while saving; let validation run on click
+  const saveDisabled = saving;
 
   return (
     <div className="card space-y-4">
@@ -165,13 +187,13 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
           </datalist>
         </div>
 
-        {/* Clock In (15-minute steps + on-blur normalization) */}
+        {/* Clock In */}
         <div>
           <label className="text-xs text-slate-600">Clock In</label>
           <input
             className="input h-11"
             type="time"
-            step={900} // 15-minute increments
+            step={900}
             lang="en-US"
             value={clockIn}
             onChange={(e) => setClockIn(e.target.value)}
@@ -196,7 +218,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
           />
         </div>
 
-        {/* Auto-calculated Hours (read-only) */}
+        {/* Hours (auto) */}
         <div>
           <label className="text-xs text-slate-600">Hours Worked</label>
           <input
@@ -207,8 +229,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
             aria-readonly="true"
           />
           <div className="mt-1 text-[11px] text-slate-500">
-            Calculated from Clock In/Out. If out ≤ in, it rolls to next day; shift remains on the
-            selected date.
+            If out ≤ in, it rolls to next day; shift remains on the selected date.
           </div>
         </div>
 
@@ -221,11 +242,11 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
             step="1"
             min="0"
             value={downs}
-            onChange={(e) => setDowns(parseInt(e.target.value || '0'))}
+            onChange={(e) => setDowns(parseInt(e.target.value || '0', 10))}
           />
         </div>
 
-        {/* Cash Tokes ($ inside the input) */}
+        {/* Cash Tokes */}
         <div>
           <label className="text-xs text-slate-600">Cash Tokes</label>
           <div className="relative">
@@ -260,7 +281,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
 
       <div className="flex flex-col gap-2 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          Total Cash Tokes: {money(tokesCash)} • $/h: {perHour.toFixed(2)} • $/down:{' '}
+          Total Cash Tokes: {money(intFrom(tokesCashStr))} • $/h: {perHour.toFixed(2)} • $/down:{' '}
           {perDown.toFixed(2)}
         </div>
         <div className="flex w-full gap-2 sm:w-auto">
@@ -268,6 +289,16 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
             className="btn btn-primary w-full sm:w-auto"
             onClick={save}
             disabled={saveDisabled}
+            aria-disabled={!casino.trim() || !clockIn || !clockOut || hours <= 0 ? true : undefined}
+            title={
+              !casino.trim()
+                ? 'Enter a casino/room'
+                : !clockIn || !clockOut
+                  ? 'Select valid times'
+                  : hours <= 0
+                    ? 'Hours must be greater than 0'
+                    : undefined
+            }
           >
             {saving ? 'Saving...' : 'Save Shift'}
           </button>
@@ -280,6 +311,17 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
           </button>
         </div>
       </div>
+
+      {/* Error area under buttons */}
+      {formError && (
+        <div
+          className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+          aria-live="polite"
+          role="alert"
+        >
+          {formError}
+        </div>
+      )}
     </div>
   );
 }

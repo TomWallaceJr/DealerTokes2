@@ -1,5 +1,6 @@
 // components/ShiftList.tsx
 'use client';
+
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -31,6 +32,7 @@ const money = (n: number) =>
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(n);
+
 const num = (n: number, digits = 2) =>
   new Intl.NumberFormat(undefined, {
     minimumFractionDigits: digits,
@@ -101,22 +103,30 @@ export default function ShiftList() {
 
   return (
     <div className="card">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-800">Shifts</h2>
-        <div className="flex gap-2">
+      {/* Header */}
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Recent Shifts</h2>
+          <p className="mt-0.5 text-xs text-slate-600">Select a shift to edit or delete.</p>
+        </div>
+        <div className="flex shrink-0 gap-2">
           <button className="btn" onClick={initialLoad} disabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
-          <button className="btn btn-outline" onClick={() => router.back()}>
+          <Link href="/" className="btn btn-outline">
             Back
-          </button>
+          </Link>
         </div>
       </div>
 
-      {error && <div className="mb-2 text-sm text-rose-600">{error}</div>}
+      {error && (
+        <div className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {error}
+        </div>
+      )}
 
       <div className="space-y-2">
-        {loading && shifts.length === 0 && <div className="text-sm text-slate-500">Loading…</div>}
+        {loading && shifts.length === 0 && <div className="text-sm text-slate-600">Loading…</div>}
 
         {shifts.map((s) => {
           const total = s.tokesCash ?? 0;
@@ -125,7 +135,7 @@ export default function ShiftList() {
 
           return (
             <div key={s.id} className="relative">
-              {/* Delete */}
+              {/* Delete button */}
               <button
                 className="absolute top-2 right-2 rounded-full p-2 text-rose-600 ring-1 ring-rose-200/70 hover:bg-rose-50 focus:ring-2 focus:ring-rose-500 focus:outline-none disabled:opacity-50"
                 title="Delete shift"
@@ -157,7 +167,7 @@ export default function ShiftList() {
                 </svg>
               </button>
 
-              {/* Clickable content → Edit page */}
+              {/* Clickable card → Edit page */}
               <Link href={`/shifts/${s.id}`} className="block" prefetch={false}>
                 <div className="card pr-12 transition hover:shadow-md">
                   <div className="flex flex-wrap items-start justify-between gap-2 text-sm">
@@ -171,7 +181,7 @@ export default function ShiftList() {
                       </div>
                     </div>
                     {s.notes ? (
-                      <div className="max-w-sm text-xs text-slate-500">{s.notes}</div>
+                      <div className="max-w-sm text-xs text-slate-600">{s.notes}</div>
                     ) : null}
                   </div>
                 </div>
@@ -181,7 +191,7 @@ export default function ShiftList() {
         })}
 
         {shifts.length === 0 && !loading && !error && (
-          <div className="text-sm text-slate-500">No shifts yet. Log one to get started.</div>
+          <div className="text-sm text-slate-600">No shifts yet. Log one to get started.</div>
         )}
       </div>
 

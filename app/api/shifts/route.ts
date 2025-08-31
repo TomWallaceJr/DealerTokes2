@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { z } from "zod";
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
 const CreateShift = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
   casino: z.string().min(1),
 
   // raw inputs
-  clockIn: z.string().regex(/^\d{2}:\d{2}$/),    // "HH:MM" 00..23 : 00..59 (UI already snaps to 15s)
+  clockIn: z.string().regex(/^\d{2}:\d{2}$/), // "HH:MM" 00..23 : 00..59 (UI already snaps to 15s)
   clockOut: z.string().regex(/^\d{2}:\d{2}$/),
 
   tokesCash: z.number().int().nonnegative().default(0),
@@ -25,11 +25,11 @@ const CreateShift = z.object({
 
 // helpers
 function toMinutes(hhmm: string): number {
-  const [hh, mm] = hhmm.split(":").map(Number);
+  const [hh, mm] = hhmm.split(':').map(Number);
   return hh * 60 + mm;
 }
 function combine(dateStr: string, minutes: number): Date {
-  const [y, m, d] = dateStr.split("-").map(Number);
+  const [y, m, d] = dateStr.split('-').map(Number);
   const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
   dt.setMinutes(minutes);
   return dt;
@@ -38,50 +38,94 @@ function roundQuarterHours(hours: number) {
   return Math.round(hours * 4) / 4;
 }
 
-
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const user = await prisma.user.findUnique({ where: { email: session.user.email! } });
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { searchParams } = new URL(req.url);
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
-
-  // pagination
-  const limitParam = Number(searchParams.get("limit") ?? 20);
-  const offsetParam = Number(searchParams.get("offset") ?? 0);
-  const take = Number.isFinite(limitParam) ? Math.max(1, Math.min(100, Math.trunc(limitParam))) : 20;
-  const skip = Number.isFinite(offsetParam) ? Math.max(0, Math.trunc(offsetParam)) : 0;
-
-  const where: any = { userId: user.id };
-  if (from || to) {
-    where.date = {};
-    if (from) where.date.gte = new Date(from);
-    if (to) where.date.lte = new Date(to);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const [items, total] = await Promise.all([
-    prisma.shift.findMany({
-      where,
-      orderBy: { date: "desc" },
-      skip,
-      take,
-    }),
-    prisma.shift.count({ where }),
-  ]);
+  const { searchParams } = new URL(req.url);
 
-  const hasMore = skip + items.length < total;
+  // pagination
+  const limit = Math.max(1, Math.min(100, Number(searchParams.get('limit') ?? 20)));
+  const offset = Math.max(0, Number(searchParams.get('offset') ?? 0));
 
-  return NextResponse.json({ items, total, hasMore, limit: take, offset: skip });
+  // filters
+  const year = searchParams.get('year'); // "2025"
+  const month = searchParams.get('month'); // "1".."12"
+  const dowRaw = searchParams.get('dow'); // "1,2,3"
+  const dows = dowRaw
+    ? dowRaw
+        .split(',')
+        .map((s) => Number(s))
+        .filter((n) => Number.isInteger(n))
+    : [];
+  const casinos = searchParams
+    .getAll('casino')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  // base DB where (user + casino + optional date range)
+  const where: any = { userId: session.user.id };
+  if (casinos.length) where.casino = { in: casinos };
+
+  // If year is present, we can push a proper DB date range (month optional)
+  if (year) {
+    const y = Number(year);
+    if (!Number.isNaN(y)) {
+      if (month) {
+        const m = Number(month) - 1; // JS months 0..11
+        if (m >= 0 && m <= 11) {
+          const start = new Date(Date.UTC(y, m, 1));
+          const end = new Date(Date.UTC(y, m + 1, 1));
+          where.date = { gte: start, lt: end };
+        }
+      } else {
+        const start = new Date(Date.UTC(y, 0, 1));
+        const end = new Date(Date.UTC(y + 1, 0, 1));
+        where.date = { gte: start, lt: end };
+      }
+    }
+  }
+
+  // Pull a superset from DB (already filtered by user/casino/(year,month?))
+  const superset = await prisma.shift.findMany({
+    where,
+    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+  });
+
+  // In-memory filters that Prisma can’t do directly (day-of-week and "month only")
+  const filtered = superset.filter((s) => {
+    const d = new Date(s.date);
+
+    // If user chose a month WITHOUT a year, filter by month here
+    if (!year && month) {
+      const m = Number(month);
+      if (!Number.isNaN(m) && d.getUTCMonth() + 1 !== m) return false;
+    }
+
+    // Day-of-week filter. NOTE: using UTC to match date stored at UTC midnight.
+    // If your stored date is local-midnight, swap to d.getDay() instead.
+    if (dows.length) {
+      const day = d.getUTCDay(); // 0=Sun .. 6=Sat
+      if (!dows.includes(day)) return false;
+    }
+
+    return true;
+  });
+
+  const total = filtered.length;
+  const items = filtered.slice(offset, offset + limit);
+  const hasMore = offset + items.length < total;
+
+  return NextResponse.json({ items, total, limit, offset, hasMore });
 }
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const user = await prisma.user.findUnique({ where: { email: session.user.email! } });
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
   const parsed = CreateShift.safeParse(body);
@@ -94,7 +138,8 @@ export async function POST(req: NextRequest) {
   const endMin0 = toMinutes(d.clockOut);
   let endMin = endMin0;
   let overnight = false;
-  if (endMin <= startMin) { // overnight into next day
+  if (endMin <= startMin) {
+    // overnight into next day
     endMin += 24 * 60;
     overnight = true;
   }

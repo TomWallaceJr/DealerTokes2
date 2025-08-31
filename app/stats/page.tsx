@@ -2,19 +2,37 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 type Summary = {
-  total: number; // sum tokesCash
-  hours: number; // sum hours
-  downs: number; // sum downs
-  hourly: number; // total / hours
-  perDown: number; // total / downs
-  count: number; // # of shifts
-  breakdowns?: {
-    byCasino?: Record<string, { total: number; hours: number; downs: number; count: number }>;
-  };
+  total: number;
+  hours: number;
+  downs: number;
+  hourly: number;
+  perDown: number;
+  count: number;
 };
+
+type Shift = {
+  id: string;
+  date: string; // ISO date
+  casino: string;
+  hours: number;
+  tokesCash: number;
+  downs: number;
+  notes?: string | null;
+};
+
+type PageResp = {
+  items: Shift[];
+  total: number;
+  hasMore: boolean;
+  limit: number;
+  offset: number;
+};
+
+const PAGE_SIZE = 20;
 
 const MONTHS = [
   { v: '', l: 'All months' },
@@ -42,7 +60,7 @@ const DOW = [
   { v: 0, l: 'Sun' },
 ];
 
-/** $1,234.56 */
+/** $1,234 (no decimals by default) */
 const money = (n: number, digits = 0) =>
   new Intl.NumberFormat(undefined, {
     style: 'currency',
@@ -50,14 +68,14 @@ const money = (n: number, digits = 0) =>
     maximumFractionDigits: digits,
   }).format(n);
 
-/** 1.2K / 3.4M */
+/** 1.2K */
 const compact = (n: number, digits = 1) =>
   new Intl.NumberFormat(undefined, {
     notation: 'compact',
     maximumFractionDigits: digits,
   }).format(n);
 
-/** 2 decimal places */
+/** 2 decimals */
 const num = (n: number, digits = 2) =>
   new Intl.NumberFormat(undefined, {
     minimumFractionDigits: digits,
@@ -83,14 +101,21 @@ export default function StatsPage() {
   const [rooms, setRooms] = useState<string[]>([]);
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
 
-  // Data state (filtered)
+  // Summary data
   const [sum, setSum] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // YTD state (independent of filters)
+  // YTD data (independent of filters)
   const [ytd, setYtd] = useState<Summary | null>(null);
   const [ytdErr, setYtdErr] = useState<string | null>(null);
+
+  // Filtered list state
+  const [list, setList] = useState<Shift[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
+  const [listErr, setListErr] = useState<string | null>(null);
 
   // Year dropdown (last 10 years)
   const yearOpts = useMemo(() => {
@@ -100,7 +125,17 @@ export default function StatsPage() {
     return arr;
   }, [now]);
 
-  // Load room suggestions
+  // Build query params shared by summary + list
+  function buildParams(base?: Record<string, string>) {
+    const params = new URLSearchParams(base);
+    if (year) params.set('year', year);
+    if (month) params.set('month', month);
+    if (selectedDows.length) params.set('dow', selectedDows.join(','));
+    for (const r of selectedRooms) params.append('casino', r);
+    return params;
+  }
+
+  // Rooms for chips
   useEffect(() => {
     (async () => {
       try {
@@ -127,17 +162,13 @@ export default function StatsPage() {
     setSelectedRooms([]);
   }
 
-  async function load() {
+  async function loadSummary() {
     setLoading(true);
     setErr(null);
     try {
-      const params = new URLSearchParams();
-      if (year) params.set('year', year);
-      if (month) params.set('month', month);
-      if (selectedDows.length) params.set('dow', selectedDows.join(','));
-      for (const r of selectedRooms) params.append('casino', r);
-
-      const res = await fetch(`/api/shifts/summary?${params.toString()}`, { cache: 'no-store' });
+      const res = await fetch(`/api/shifts/summary?${buildParams().toString()}`, {
+        cache: 'no-store',
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: Summary = await res.json();
       setSum(data);
@@ -148,9 +179,40 @@ export default function StatsPage() {
     }
   }
 
-  // Load filtered and YTD on mount
+  async function loadList(resetList: boolean) {
+    if (resetList) {
+      setList([]);
+      setOffset(0);
+      setHasMore(false);
+      setListErr(null);
+    }
+    setListLoading(true);
+    try {
+      const params = buildParams({
+        limit: String(PAGE_SIZE),
+        offset: String(resetList ? 0 : offset),
+      });
+      const res = await fetch(`/api/shifts?${params.toString()}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: PageResp = await res.json();
+      setHasMore(data.hasMore);
+      setOffset(data.offset + data.items.length);
+      setList((prev) => (resetList ? data.items : [...prev, ...data.items]));
+    } catch {
+      setListErr('Failed to load shifts.');
+    } finally {
+      setListLoading(false);
+    }
+  }
+
+  function applyFilters() {
+    loadSummary();
+    loadList(true);
+  }
+
+  // Initial load: filtered summary + list, and YTD (current year)
   useEffect(() => {
-    load();
+    applyFilters();
     (async () => {
       try {
         const cy = String(now.getFullYear());
@@ -176,26 +238,33 @@ export default function StatsPage() {
 
   return (
     <main className="space-y-4">
-      {/* Header with name */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900">{who}&apos;s Income</h1>
         <div className="flex gap-2">
-          <button className="btn btn-primary" onClick={load} disabled={loading}>
-            {loading ? 'Refreshing...' : 'Apply Filters'}
+          <button
+            className="btn btn-primary"
+            onClick={applyFilters}
+            disabled={loading || listLoading}
+          >
+            {loading || listLoading ? 'Applying…' : 'Apply Filters'}
           </button>
-          <button className="btn btn-outline" onClick={reset} disabled={loading}>
+          <button className="btn btn-outline" onClick={reset} disabled={loading || listLoading}>
             Reset
           </button>
+          <Link href="/" className="btn btn-outline">
+            Home
+          </Link>
         </div>
       </div>
 
-      {/* YTD line (glassy pill) */}
+      {/* YTD pill */}
       <div className="rounded-2xl border border-emerald-200/60 bg-white/70 p-3 text-sm shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
         {ytdErr ? (
           <span className="text-rose-600">{ytdErr}</span>
         ) : (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="stat">YTD {now.getFullYear()}</span>
+            <span className="text-slate-500">YTD {now.getFullYear()}</span>
             <span className="font-medium text-slate-900">{money(ytd?.total ?? 0)}</span>
             <span className="text-slate-400">•</span>
             <span className="font-medium text-slate-800">${num(ytd?.hourly ?? 0)} / h</span>
@@ -265,67 +334,116 @@ export default function StatsPage() {
         </div>
       </div>
 
+      {/* Errors */}
       {err && <div className="text-sm text-rose-600">{err}</div>}
-      {loading && !sum && <div className="text-sm text-slate-500">Loading…</div>}
 
-      {/* Summary tiles (filtered) */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="card">
-          <div className="text-xs text-slate-600">Total Tokes</div>
-          <div className="text-2xl font-bold text-slate-900">{money(total)}</div>
-        </div>
-        <div className="card">
-          <div className="text-xs text-slate-600">Total Hours</div>
-          <div className="text-2xl font-bold text-slate-900">{compact(hours, 2)}</div>
-        </div>
-        <div className="card">
-          <div className="text-xs text-slate-600">Avg $/h</div>
-          <div className="text-2xl font-bold text-slate-900">{num(hourly, 2)}</div>
-        </div>
-      </div>
-
-      {/* Downs tiles */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="card">
-          <div className="text-xs text-slate-600">Total Downs</div>
-          <div className="text-2xl font-bold text-slate-900">{compact(downs, 1)}</div>
-        </div>
-        <div className="card">
-          <div className="text-xs text-slate-600">Avg $/down</div>
-          <div className="text-2xl font-bold text-slate-900">{num(perDown, 2)}</div>
-        </div>
-        <div className="card">
-          <div className="text-xs text-slate-600">Total Shifts</div>
-          <div className="text-2xl font-bold text-slate-900">{compact(shiftCount, 1)}</div>
-        </div>
-      </div>
-
-      {/* Per-room breakdown (filtered) */}
-      {sum?.breakdowns?.byCasino && Object.keys(sum.breakdowns.byCasino).length > 0 && (
-        <div className="card">
-          <h2 className="mb-2 text-lg font-semibold text-slate-900">By Room</h2>
-          <div className="grid gap-2">
-            {Object.entries(sum.breakdowns.byCasino).map(([room, v]) => {
-              const perH = v.hours > 0 ? v.total / v.hours : 0;
-              const perD = v.downs > 0 ? v.total / v.downs : 0;
-              return (
-                <div
-                  key={room}
-                  className="rounded-2xl border border-emerald-200/60 bg-white/70 p-3 text-sm shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60"
-                >
-                  <div className="flex flex-wrap justify-between gap-2">
-                    <div className="font-medium text-slate-900">{room}</div>
-                    <div className="text-slate-600">
-                      {money(v.total)} • {compact(v.hours, 2)}h • {compact(v.downs)} downs • $
-                      {num(perH, 2)}/h • ${num(perD, 2)}/down • {compact(v.count)} shifts
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+      {/* KPI STRIP (cleaner: one card, 2 rows of metrics) */}
+      <div className="card">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <div className="text-xs text-slate-600">Total Income</div>
+            <div className="text-2xl font-bold text-slate-900">{money(total)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-600">Total Hours</div>
+            <div className="text-2xl font-bold text-slate-900">{compact(hours, 2)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-600">Total Downs</div>
+            <div className="text-2xl font-bold text-slate-900">{compact(downs, 1)}</div>
           </div>
         </div>
-      )}
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div>
+            <div className="text-xs text-slate-600">Avg $/h</div>
+            <div className="text-2xl font-bold text-slate-900">{num(hourly, 2)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-600">Avg $/down</div>
+            <div className="text-2xl font-bold text-slate-900">{num(perDown, 2)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-600">Total Shifts</div>
+            <div className="text-2xl font-bold text-slate-900">{compact(shiftCount, 1)}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* FILTERED SHIFTS LIST (paginated) */}
+      <div className="card">
+        <div className="mb-2 flex items-start justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Shifts (filtered)</h2>
+            <p className="mt-0.5 text-xs text-slate-600">
+              Most recent first • {compact(shiftCount || 0)} total
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button className="btn" onClick={() => loadList(true)} disabled={listLoading}>
+              {listLoading ? 'Refreshing…' : 'Refresh'}
+            </button>
+            <Link href="/" className="btn btn-outline">
+              Home
+            </Link>
+          </div>
+        </div>
+
+        {listErr && (
+          <div className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {listErr}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          {listLoading && list.length === 0 && (
+            <div className="text-sm text-slate-600">Loading…</div>
+          )}
+
+          {list.map((s) => {
+            const total = s.tokesCash ?? 0;
+            const perHour = s.hours > 0 ? total / s.hours : 0;
+            const perDown = s.downs > 0 ? total / s.downs : 0;
+            return (
+              <Link key={s.id} href={`/shifts/${s.id}`} className="block" prefetch={false}>
+                <div className="card transition hover:shadow-md">
+                  <div className="flex flex-wrap items-start justify-between gap-2 text-sm">
+                    <div>
+                      <div className="font-medium text-slate-900">
+                        {new Date(s.date).toLocaleDateString()} • {s.casino}
+                      </div>
+                      <div className="text-slate-600">
+                        {num(s.hours, 2)}h, {s.downs} downs • {money(total)} total • ${num(perHour)}
+                        /h • ${num(perDown)}/down
+                      </div>
+                    </div>
+                    {s.notes ? (
+                      <div className="max-w-sm text-xs text-slate-600">{s.notes}</div>
+                    ) : null}
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+
+          {list.length === 0 && !listLoading && !listErr && (
+            <div className="text-sm text-slate-600">No shifts matched these filters.</div>
+          )}
+        </div>
+
+        {/* Bottom-right "more…" */}
+        <div className="mt-3 flex justify-end">
+          {hasMore && (
+            <button
+              onClick={() => loadList(false)}
+              className="chip hover:underline disabled:opacity-50"
+              disabled={listLoading}
+            >
+              {listLoading ? 'Loading…' : 'more…'}
+            </button>
+          )}
+        </div>
+      </div>
     </main>
   );
 }
