@@ -29,19 +29,18 @@ model Shift {
   date   DateTime
   casino String
 
-  // renamed in UI only
   hours Float
 
-  // Cash inputs
-  tokesCash Int @default(0) // "Cash Tokes" (kept as whole dollars)
-  downs     Int @default(0) // "Cash Downs"
+  tokesCash Int @default(0)
+  downs     Int @default(0)
 
-  // Tournament inputs
   tournamentDowns       Int   @default(0)
   tournamentRatePerDown Float @default(0)
+  hourlyRate            Float @default(0)
 
-  // Hourly pay (if any)
-  hourlyRate Float @default(0)
+  // NEW (nullable to migrate safely)
+  clockIn  DateTime?
+  clockOut DateTime?
 
   notes     String?
   createdAt DateTime @default(now())

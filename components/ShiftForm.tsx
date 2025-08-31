@@ -100,6 +100,8 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
       const payload = {
         date,
         casino: casino.trim(),
+        clockIn,         // "HH:MM"
+        clockOut,        // "HH:MM"
         hours,       // derived
         tokesCash,   // int ($)
         downs,       // int

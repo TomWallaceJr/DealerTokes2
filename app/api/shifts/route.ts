@@ -5,20 +5,38 @@ import { authOptions } from "@/lib/auth";
 import { z } from "zod";
 
 const CreateShift = z.object({
-  date: z.string(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
   casino: z.string().min(1),
-  hours: z.number().positive(),
 
-  tokesCash: z.number().int().nonnegative().default(0), // Cash Tokes
-  downs: z.number().int().nonnegative().default(0),     // Cash Downs
+  // raw inputs
+  clockIn: z.string().regex(/^\d{2}:\d{2}$/),    // "HH:MM" 00..23 : 00..59 (UI already snaps to 15s)
+  clockOut: z.string().regex(/^\d{2}:\d{2}$/),
 
-  tournamentDowns: z.number().int().nonnegative().default(0),
-  tournamentRatePerDown: z.number().nonnegative().default(0),
+  tokesCash: z.number().int().nonnegative().default(0),
+  downs: z.number().int().nonnegative().default(0),
 
-  hourlyRate: z.number().nonnegative().default(0),
+  // keep but default to 0 (MVP hides these)
+  tournamentDowns: z.number().int().nonnegative().default(0).optional(),
+  tournamentRatePerDown: z.number().nonnegative().default(0).optional(),
+  hourlyRate: z.number().nonnegative().default(0).optional(),
 
   notes: z.string().optional(),
 });
+
+// helpers
+function toMinutes(hhmm: string): number {
+  const [hh, mm] = hhmm.split(":").map(Number);
+  return hh * 60 + mm;
+}
+function combine(dateStr: string, minutes: number): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
+  dt.setMinutes(minutes);
+  return dt;
+}
+function roundQuarterHours(hours: number) {
+  return Math.round(hours * 4) / 4;
+}
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -37,7 +55,10 @@ export async function GET(req: NextRequest) {
     if (to) where.date.lte = new Date(to);
   }
 
-  const shifts = await prisma.shift.findMany({ where, orderBy: { date: "desc" } });
+  const shifts = await prisma.shift.findMany({
+    where,
+    orderBy: { date: "desc" },
+  });
   return NextResponse.json(shifts);
 }
 
@@ -54,20 +75,37 @@ export async function POST(req: NextRequest) {
   }
   const d = parsed.data;
 
+  const startMin = toMinutes(d.clockIn);
+  const endMin0 = toMinutes(d.clockOut);
+  let endMin = endMin0;
+  let overnight = false;
+  if (endMin <= startMin) { // overnight into next day
+    endMin += 24 * 60;
+    overnight = true;
+  }
+
+  const clockIn = combine(d.date, startMin);
+  const clockOut = combine(d.date, endMin);
+  if (overnight) clockOut.setDate(clockOut.getDate() + 0); // already rolled via +24h minutes
+
+  const hours = roundQuarterHours((endMin - startMin) / 60);
+
   const shift = await prisma.shift.create({
     data: {
       userId: user.id,
-      date: new Date(d.date),
+      date: new Date(d.date), // stays the clock-in date
       casino: d.casino,
 
-      hours: d.hours,
+      hours,
       tokesCash: d.tokesCash ?? 0,
       downs: d.downs ?? 0,
 
       tournamentDowns: d.tournamentDowns ?? 0,
       tournamentRatePerDown: d.tournamentRatePerDown ?? 0,
-
       hourlyRate: d.hourlyRate ?? 0,
+
+      clockIn,
+      clockOut,
 
       notes: d.notes,
     },

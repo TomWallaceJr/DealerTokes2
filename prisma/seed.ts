@@ -13,19 +13,26 @@ function randFloat(min: number, max: number, digits = 2) {
 function startOfISOWeek(d: Date) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
-  const day = x.getDay(); // 0=Sun..6=Sat
-  const delta = (day + 6) % 7; // Monday=0
+  const day = x.getDay();              // 0..6
+  const delta = (day + 6) % 7;         // Monday=0
   x.setDate(x.getDate() - delta);
   return x;
 }
 function sameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear()
-    && a.getMonth() === b.getMonth()
-    && a.getDate() === b.getDate();
+  return a.getFullYear() === b.getFullYear() &&
+         a.getMonth() === b.getMonth() &&
+         a.getDate() === b.getDate();
+}
+
+function combineDateMinutes(dateOnly: Date, minutes: number) {
+  const d = new Date(dateOnly);
+  d.setHours(0, 0, 0, 0);
+  d.setMinutes(minutes);
+  return d;
 }
 
 async function main() {
-  // --- Example user (Jon Doe) with password Demo123! ---
+  // User
   const email = "example@example.com";
   const name = "Jon Doe";
   const passwordHash = await bcrypt.hash("Demo123!", 12);
@@ -36,23 +43,23 @@ async function main() {
     create: { email, name, passwordHash },
   });
 
-  // Clear previous shifts for idempotent seeding
+  // Clear existing shifts for idempotency
   await prisma.shift.deleteMany({ where: { userId: user.id } });
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const start = new Date(today);
-  start.setDate(start.getDate() - 365 * 2); // ~2 years back
+  start.setDate(start.getDate() - 365 * 2); // ~2 years
 
-  const ROOMS = ["Wind Creek", "Palms", "Borgata", "Bellagio", "Red Rock", "Aria"];
-  const data: Array<Parameters<typeof prisma.shift.createMany>[0]["data"][number]> = [];
+  const ROOMS = ["Wind Creek", "Mohegan"];
   const createdAt = new Date();
+  const batch: Parameters<typeof prisma.shift.createMany>[0]["data"] = [];
 
-  // Walk week-by-week; pick 5 random workdays per full week (partial current week uses days up to today)
   let cursor = new Date(start);
   while (cursor <= today) {
     const weekStart = startOfISOWeek(cursor);
 
+    // All 7 days of this ISO week
     const weekDays: Date[] = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(weekStart);
       d.setDate(weekStart.getDate() + i);
@@ -60,31 +67,40 @@ async function main() {
       return d;
     });
 
-    // Eligible days for this week (don’t go past today)
+    // Eligible indices (don’t go past today)
     const eligibleIdx = weekDays.map((_, i) => i).filter(i => weekDays[i] <= today);
     const pickCount = Math.min(5, eligibleIdx.length);
 
-    // Choose distinct indices for workdays
+    // Pick 5 distinct days
     const picked = new Set<number>();
-    while (picked.size < pickCount) {
-      picked.add(eligibleIdx[randInt(0, eligibleIdx.length - 1)]);
-    }
+    while (picked.size < pickCount) picked.add(eligibleIdx[randInt(0, eligibleIdx.length - 1)]);
 
     for (const i of picked) {
-      const d = weekDays[i];
-      const dow = d.getDay(); // 0=Sun,6=Sat
+      const day = weekDays[i];
+      const dow = day.getDay(); // 0=Sun..6=Sat
       const isWeekend = dow === 0 || dow === 6;
 
-      // Hours Worked: 1.00..10.00 in quarter-hour increments
-      const hours = randInt(4, 40) / 4;
+      // Start time: day shift between 08:00 and 14:00, in 15-minute increments
+      const startHour = randInt(8, 14);             // 8..14
+      const startMinStep = randInt(0, 3) * 15;      // 0,15,30,45
+      const startMinutes = startHour * 60 + startMinStep;
 
-      // Cash Downs: ~ two 30-min downs per hour
-      const downs = Math.max(0, Math.round(hours * 2));
+      // Hours worked: 1.00..10.00 (quarter-hour)
+      const hoursQ = randInt(4, 40) / 4;            // 1.00..10.00
+      const endMinutesRaw = startMinutes + Math.round(hoursQ * 60);
+      const overnight = endMinutesRaw >= 24 * 60;
+      const endMinutes = endMinutesRaw % (24 * 60);
 
-      // Cash Tokes: $10..$500 (integer)
+      const clockIn = combineDateMinutes(day, startMinutes);
+      const clockOut = combineDateMinutes(overnight ? new Date(day.getTime() + 86400000) : day, endMinutes);
+
+      // Cash Downs ≈ 2 per hour
+      const downs = Math.max(0, Math.round(hoursQ * 2));
+
+      // Cash Tokes: $10..$500
       const tokesCash = randInt(10, 500);
 
-      // Tournament: only Tue/Wed/Thu (2/3/4)
+      // Tournament only Tue/Wed/Thu
       let tournamentDowns = 0;
       let tournamentRatePerDown = 0;
       if (dow === 2 || dow === 3 || dow === 4) {
@@ -92,47 +108,44 @@ async function main() {
         tournamentRatePerDown = randFloat(9.5, 25, 2);
       }
 
-      // Hourly rate: 8.75 weekday, 9.25 weekends
+      // Hourly rate: 8.75 weekday, 9.25 weekend
       const hourlyRate = isWeekend ? 9.25 : 8.75;
 
       const casino = ROOMS[randInt(0, ROOMS.length - 1)];
 
-      data.push({
+      batch.push({
         userId: user.id,
-        date: d,
+        date: day, // stays the clock-in date
         casino,
-        hours,
+        hours: hoursQ,
         tokesCash,
         downs,
         tournamentDowns,
         tournamentRatePerDown,
         hourlyRate,
+        clockIn,
+        clockOut,
         notes: null,
         createdAt,
         updatedAt: createdAt,
       });
     }
 
-    // Next week
+    // next week
     const nextWeek = new Date(weekStart);
     nextWeek.setDate(weekStart.getDate() + 7);
     cursor = nextWeek;
   }
 
   // Insert in chunks
-  const chunkSize = 500;
-  for (let i = 0; i < data.length; i += chunkSize) {
-    await prisma.shift.createMany({ data: data.slice(i, i + chunkSize) });
+  const chunk = 500;
+  for (let i = 0; i < batch.length; i += chunk) {
+    await prisma.shift.createMany({ data: batch.slice(i, i + chunk) });
   }
 
-  console.log(`Seeded ${data.length} shifts for ${name} <${email}>`);
+  console.log(`Seeded ${batch.length} shifts for ${name} <${email}> with day-shift times and 15-min steps.`);
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .catch((e) => { console.error(e); process.exit(1); })
+  .finally(async () => { await prisma.$disconnect(); });
