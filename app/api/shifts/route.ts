@@ -38,6 +38,7 @@ function roundQuarterHours(hours: number) {
   return Math.round(hours * 4) / 4;
 }
 
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -48,6 +49,12 @@ export async function GET(req: NextRequest) {
   const from = searchParams.get("from");
   const to = searchParams.get("to");
 
+  // pagination
+  const limitParam = Number(searchParams.get("limit") ?? 20);
+  const offsetParam = Number(searchParams.get("offset") ?? 0);
+  const take = Number.isFinite(limitParam) ? Math.max(1, Math.min(100, Math.trunc(limitParam))) : 20;
+  const skip = Number.isFinite(offsetParam) ? Math.max(0, Math.trunc(offsetParam)) : 0;
+
   const where: any = { userId: user.id };
   if (from || to) {
     where.date = {};
@@ -55,11 +62,19 @@ export async function GET(req: NextRequest) {
     if (to) where.date.lte = new Date(to);
   }
 
-  const shifts = await prisma.shift.findMany({
-    where,
-    orderBy: { date: "desc" },
-  });
-  return NextResponse.json(shifts);
+  const [items, total] = await Promise.all([
+    prisma.shift.findMany({
+      where,
+      orderBy: { date: "desc" },
+      skip,
+      take,
+    }),
+    prisma.shift.count({ where }),
+  ]);
+
+  const hasMore = skip + items.length < total;
+
+  return NextResponse.json({ items, total, hasMore, limit: take, offset: skip });
 }
 
 export async function POST(req: NextRequest) {
