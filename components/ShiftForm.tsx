@@ -1,34 +1,27 @@
+// components/ShiftForm.tsx
 "use client";
 import { useEffect, useState } from "react";
-
-const HOURS_12 = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")); // 01..12
-const MINUTES_15 = ["00", "15", "30", "45"];
-const PERIOD = ["AM", "PM"] as const;
 
 export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [casino, setCasino] = useState<string>("");
 
-  // Currency (only Cash Tokes shown in MVP)
-  const [tokesCashStr, setTokesCashStr] = useState<string>("0");
+  // Native time inputs (mobile shows wheel/scroller)
+  const [clockIn, setClockIn] = useState<string>("");   // "HH:MM" (24h)
+  const [clockOut, setClockOut] = useState<string>(""); // "HH:MM"
 
-  // 12-hour time pickers
-  const [inHH, setInHH] = useState<string>("");
-  const [inMM, setInMM] = useState<string>("");
-  const [inAP, setInAP] = useState<"AM" | "PM" | "">("");
-  const [outHH, setOutHH] = useState<string>("");
-  const [outMM, setOutMM] = useState<string>("");
-  const [outAP, setOutAP] = useState<"AM" | "PM" | "">("");
+  // Derived hours (read-only)
+  const [hours, setHours] = useState<number>(0);
 
-  // Derived
-  const [hours, setHours] = useState<number>(0); // read-only
-  const [downs, setDowns] = useState<number>(0); // Cash downs
+  // MVP fields
+  const [downs, setDowns] = useState<number>(0);                 // Cash Downs
+  const [tokesCashStr, setTokesCashStr] = useState<string>("0"); // Cash Tokes (string for clear-on-focus)
 
   const [notes, setNotes] = useState<string>("");
   const [saving, setSaving] = useState<boolean>(false);
   const [rooms, setRooms] = useState<string[]>([]);
 
-  // Room suggestions
+  // Load previously used rooms (per user)
   useEffect(() => {
     (async () => {
       try {
@@ -45,30 +38,46 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
   const intFrom = (s: string) => {
     const n = parseInt(s || "0", 10);
     return Number.isFinite(n) ? n : 0;
-    };
+  };
 
-  function toMinutes12(hh: string, mm: string, ap: "AM" | "PM" | ""): number | null {
-    if (!hh || !mm || !ap) return null;
-    const H = parseInt(hh, 10);
-    const M = parseInt(mm, 10);
-    if (!(H >= 1 && H <= 12) || !MINUTES_15.includes(mm)) return null;
-    let h24 = H % 12; // 12 AM -> 0, 12 PM -> 12
-    if (ap === "PM") h24 += 12;
-    return h24 * 60 + M;
+  // Parse "HH:MM" -> minutes past midnight
+  function toMinutes(hhmm: string): number | null {
+    if (!/^\d{2}:\d{2}$/.test(hhmm)) return null;
+    const [hh, mm] = hhmm.split(":").map(Number);
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+    return hh * 60 + mm;
   }
 
-  // Recompute hours from Clock In/Out (overnight supported; shift stays on selected date)
+  // Snap any time string to nearest 15 minutes (00/15/30/45)
+  function normalizeTimeQuarter(hhmm: string): string {
+    if (!/^\d{2}:\d{2}$/.test(hhmm)) return "";
+    let [hh, mm] = hhmm.split(":").map((v) => parseInt(v, 10));
+    if (!(hh >= 0 && hh <= 23) || !(mm >= 0 && mm <= 59)) return "";
+    let snapped = Math.round(mm / 15) * 15;
+    if (snapped === 60) {
+      hh = (hh + 1) % 24;
+      snapped = 0;
+    }
+    const HH = String(hh).padStart(2, "0");
+    const MM = String(snapped).padStart(2, "0");
+    return `${HH}:${MM}`;
+  }
+
+  // Auto-calc Hours Worked when times change (overnight supported; shift belongs to selected date)
   useEffect(() => {
-    const start = toMinutes12(inHH, inMM, inAP);
-    const end = toMinutes12(outHH, outMM, outAP);
-    if (start == null || end == null) { setHours(0); return; }
+    const start = toMinutes(clockIn);
+    const end = toMinutes(clockOut);
+    if (start == null || end == null) {
+      setHours(0);
+      return;
+    }
     let duration = end - start;
-    if (duration <= 0) duration += 24 * 60; // treat as next day
+    if (duration <= 0) duration += 24 * 60; // if out ≤ in, treat as next day
     const h = duration / 60;
     setHours(Math.round(h * 4) / 4); // nearest 0.25h
-  }, [inHH, inMM, inAP, outHH, outMM, outAP]);
+  }, [clockIn, clockOut]);
 
-  // Cash Tokes clear-on-focus
+  // Cash Tokes clear-on-focus UX
   const clearOnFocus = (value: string, setter: (v: string) => void) => () => {
     if (value === "0") setter("");
   };
@@ -76,13 +85,13 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
     if (value.trim() === "") setter("0");
   };
 
-  // Previews
+  // Preview metrics (cash tokes only for MVP)
   const tokesCash = intFrom(tokesCashStr);
   const perHour = hours > 0 ? tokesCash / hours : 0;
   const perDown = downs > 0 ? tokesCash / downs : 0;
 
   async function save() {
-    if (!inHH || !inMM || !inAP || !outHH || !outMM || !outAP || hours <= 0) {
+    if (!clockIn || !clockOut || hours <= 0) {
       alert("Please select valid Clock In and Clocked Out times.");
       return;
     }
@@ -91,10 +100,10 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
       const payload = {
         date,
         casino: casino.trim(),
-        hours,         // derived
-        tokesCash,     // int
-        downs,         // int
-        // tournamentDowns/hourlyRate/ratePerDown omitted → server defaults to 0
+        hours,       // derived
+        tokesCash,   // int ($)
+        downs,       // int
+        // hourly/tournament omitted in MVP → server defaults to 0
         notes: notes || undefined,
       };
 
@@ -105,13 +114,14 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
       });
       if (!res.ok) throw new Error("Save failed");
 
+      // add new room to local suggestions
       const c = casino.trim();
       if (c && !rooms.includes(c)) setRooms((p) => [...p, c].sort((a, b) => a.localeCompare(b)));
 
       // reset (keep date)
       setCasino("");
-      setInHH(""); setInMM(""); setInAP("");
-      setOutHH(""); setOutMM(""); setOutAP("");
+      setClockIn("");
+      setClockOut("");
       setDowns(0);
       setTokesCashStr("0");
       setNotes("");
@@ -121,12 +131,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
     }
   }
 
-  const saveDisabled =
-    saving ||
-    !casino.trim() ||
-    !inHH || !inMM || !inAP ||
-    !outHH || !outMM || !outAP ||
-    hours <= 0;
+  const saveDisabled = saving || !casino.trim() || !clockIn || !clockOut || hours <= 0;
 
   return (
     <div className="card space-y-4">
@@ -146,48 +151,41 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
             onChange={(e) => setCasino(e.target.value)}
           />
           <datalist id="rooms-suggest">
-            {rooms.map((r) => <option key={r} value={r} />)}
+            {rooms.map((r) => (
+              <option key={r} value={r} />
+            ))}
           </datalist>
         </div>
 
-        {/* Clock In */}
+        {/* Clock In (15-minute steps + on-blur normalization) */}
         <div>
           <label className="text-xs text-slate-400">Clock In</label>
-          <div className="flex gap-2">
-            <select className="input" value={inHH} onChange={(e) => setInHH(e.target.value)}>
-              <option value="" disabled>HH</option>
-              {HOURS_12.map(h => <option key={h} value={h}>{h}</option>)}
-            </select>
-            <span className="self-center">:</span>
-            <select className="input" value={inMM} onChange={(e) => setInMM(e.target.value)}>
-              <option value="" disabled>MM</option>
-              {MINUTES_15.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <select className="input" value={inAP} onChange={(e) => setInAP(e.target.value as "AM"|"PM")}>
-              <option value="" disabled>AM/PM</option>
-              {PERIOD.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
+          <input
+            className="input h-11"
+            type="time"
+            step={900}      // 900s = 15 minutes (00/15/30/45)
+            lang="en-US"    // AM/PM on many browsers; mobile shows wheel
+            value={clockIn}
+            onChange={(e) => setClockIn(e.target.value)}
+            onBlur={(e) => setClockIn(normalizeTimeQuarter(e.target.value))}
+            placeholder="--:--"
+          />
+          <div className="mt-1 text-[11px] text-slate-500">Minutes snap to 00, 15, 30, or 45.</div>
         </div>
 
         {/* Clocked Out */}
         <div>
           <label className="text-xs text-slate-400">Clocked Out</label>
-          <div className="flex gap-2">
-            <select className="input" value={outHH} onChange={(e) => setOutHH(e.target.value)}>
-              <option value="" disabled>HH</option>
-              {HOURS_12.map(h => <option key={h} value={h}>{h}</option>)}
-            </select>
-            <span className="self-center">:</span>
-            <select className="input" value={outMM} onChange={(e) => setOutMM(e.target.value)}>
-              <option value="" disabled>MM</option>
-              {MINUTES_15.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <select className="input" value={outAP} onChange={(e) => setOutAP(e.target.value as "AM"|"PM")}>
-              <option value="" disabled>AM/PM</option>
-              {PERIOD.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
+          <input
+            className="input h-11"
+            type="time"
+            step={900}
+            lang="en-US"
+            value={clockOut}
+            onChange={(e) => setClockOut(e.target.value)}
+            onBlur={(e) => setClockOut(normalizeTimeQuarter(e.target.value))}
+            placeholder="--:--"
+          />
         </div>
 
         {/* Auto-calculated Hours (read-only) */}
@@ -195,7 +193,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
           <label className="text-xs text-slate-400">Hours Worked</label>
           <input className="input" type="text" value={hours.toFixed(2)} readOnly aria-readonly="true" />
           <div className="mt-1 text-[11px] text-slate-500">
-            Calculated from Clock In/Out. If out ≤ in, it counts as next day; shift remains on selected date.
+            Calculated from Clock In/Out. If out ≤ in, it rolls to next day; shift remains on the selected date.
           </div>
         </div>
 
@@ -212,7 +210,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
           />
         </div>
 
-        {/* Cash Tokes ($ inside input) */}
+        {/* Cash Tokes ($ inside the input) */}
         <div>
           <label className="text-xs text-slate-400">Cash Tokes</label>
           <div className="relative">
