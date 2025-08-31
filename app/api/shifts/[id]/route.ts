@@ -8,8 +8,15 @@ const UpdateShift = z.object({
   date: z.string().optional(),
   casino: z.string().min(1).optional(),
   hours: z.number().positive().optional(),
+
   tokesCash: z.number().int().nonnegative().optional(),
   downs: z.number().int().nonnegative().optional(),
+
+  tournamentDowns: z.number().int().nonnegative().optional(),
+  tournamentRatePerDown: z.number().nonnegative().optional(),
+
+  hourlyRate: z.number().nonnegative().optional(),
+
   notes: z.string().optional().nullable(),
 });
 
@@ -20,10 +27,7 @@ async function requireUser() {
   return user ?? null;
 }
 
-export async function GET(
-  _req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -33,10 +37,7 @@ export async function GET(
   return NextResponse.json(shift);
 }
 
-export async function PATCH(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -55,10 +56,7 @@ export async function PATCH(
   return NextResponse.json(updated);
 }
 
-export async function DELETE(
-  _req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

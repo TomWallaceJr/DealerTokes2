@@ -8,8 +8,15 @@ const CreateShift = z.object({
   date: z.string(),
   casino: z.string().min(1),
   hours: z.number().positive(),
-  tokesCash: z.number().int().nonnegative().default(0),
-  downs: z.number().int().nonnegative().default(0),
+
+  tokesCash: z.number().int().nonnegative().default(0), // Cash Tokes
+  downs: z.number().int().nonnegative().default(0),     // Cash Downs
+
+  tournamentDowns: z.number().int().nonnegative().default(0),
+  tournamentRatePerDown: z.number().nonnegative().default(0),
+
+  hourlyRate: z.number().nonnegative().default(0),
+
   notes: z.string().optional(),
 });
 
@@ -52,9 +59,16 @@ export async function POST(req: NextRequest) {
       userId: user.id,
       date: new Date(d.date),
       casino: d.casino,
+
       hours: d.hours,
       tokesCash: d.tokesCash ?? 0,
       downs: d.downs ?? 0,
+
+      tournamentDowns: d.tournamentDowns ?? 0,
+      tournamentRatePerDown: d.tournamentRatePerDown ?? 0,
+
+      hourlyRate: d.hourlyRate ?? 0,
+
       notes: d.notes,
     },
   });

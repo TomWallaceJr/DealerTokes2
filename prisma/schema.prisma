@@ -24,13 +24,24 @@ model User {
 }
 
 model Shift {
-  id        String   @id @default(cuid())
-  userId    String
-  date      DateTime
-  casino    String
-  hours     Float
-  tokesCash Int      @default(0)
-  downs     Int      @default(0) // NEW
+  id     String   @id @default(cuid())
+  userId String
+  date   DateTime
+  casino String
+
+  // renamed in UI only
+  hours Float
+
+  // Cash inputs
+  tokesCash Int @default(0) // "Cash Tokes" (kept as whole dollars)
+  downs     Int @default(0) // "Cash Downs"
+
+  // Tournament inputs
+  tournamentDowns       Int   @default(0)
+  tournamentRatePerDown Float @default(0)
+
+  // Hourly pay (if any)
+  hourlyRate Float @default(0)
 
   notes     String?
   createdAt DateTime @default(now())
