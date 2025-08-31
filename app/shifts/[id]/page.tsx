@@ -5,22 +5,34 @@ import { prisma } from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import EditShiftForm from "@/components/EditShiftForm";
 
-function toHHMM(dateISO: string) {
-  const d = new Date(dateISO);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  // Snap incoming minutes to 00/15/30/45 for our UI
-  const step = Math.round(Number(mm) / 15) * 15;
-  const mmSnap = String(step === 60 ? 0 : step).padStart(2, "0");
-  const hhSnap = String(step === 60 ? (Number(hh) + 1) % 24 : Number(hh)).padStart(2, "0");
-  return `${hhSnap}:${mmSnap}`;
+type ShiftPayload = {
+  id: string;
+  date: string;      // YYYY-MM-DD
+  casino: string;
+  downs: number;
+  tokesCash: number;
+  notes: string;
+  clockIn: string;   // "HH:MM"
+  clockOut: string;  // "HH:MM"
+};
+
+function toHHMM(dt: Date): string {
+  let hh = dt.getHours();
+  let mm = dt.getMinutes();
+  // snap minutes to 00/15/30/45
+  let snapped = Math.round(mm / 15) * 15;
+  if (snapped === 60) {
+    hh = (hh + 1) % 24;
+    snapped = 0;
+  }
+  return `${String(hh).padStart(2, "0")}:${String(snapped).padStart(2, "0")}`;
 }
 
 export default async function EditShiftPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) redirect("/auth/signin?callbackUrl=/shifts");
 
-  const user = await prisma.user.findUnique({ where: { email: session.user.email! } });
+  const user = await prisma.user.findUnique({ where: { email: session.user.email } });
   if (!user) redirect("/auth/signin?callbackUrl=/shifts");
 
   const shift = await prisma.shift.findFirst({
@@ -29,15 +41,19 @@ export default async function EditShiftPage({ params }: { params: { id: string }
 
   if (!shift) notFound();
 
-  const payload = {
+  const dateStr = shift.date.toISOString().slice(0, 10);
+  const clockInHHMM = shift.clockIn ? toHHMM(new Date(shift.clockIn)) : "08:00";
+  const clockOutHHMM = shift.clockOut ? toHHMM(new Date(shift.clockOut)) : "16:00";
+
+  const payload: ShiftPayload = {
     id: shift.id,
-    date: shift.date.toISOString().slice(0, 10), // YYYY-MM-DD
+    date: dateStr,
     casino: shift.casino,
     downs: shift.downs,
     tokesCash: shift.tokesCash,
     notes: shift.notes ?? "",
-    clockIn: toHHMM(shift.clockIn?.toISOString() ?? `${payload?.date}T08:00:00Z`),
-    clockOut: toHHMM(shift.clockOut?.toISOString() ?? `${payload?.date}T16:00:00Z`),
+    clockIn: clockInHHMM,
+    clockOut: clockOutHHMM,
   };
 
   return (

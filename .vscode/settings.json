@@ -1,0 +1,23 @@
+{
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true,
+    "editor.formatOnType": true,         // indent/brace cleanup when you press Enter
+    "editor.autoIndent": "full",
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.detectIndentation": false,
+  
+    // run eslint fixes (incl. unused imports) on save
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": true,
+      "source.organizeImports": true
+    },
+  
+    // use the workspace TS version
+    "typescript.tsdk": "node_modules/typescript/lib",
+  
+    // optional: prettier only runs when a config exists
+    "prettier.requireConfig": true
+  }
+  
