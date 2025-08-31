@@ -1,10 +1,11 @@
 // app/layout.tsx
+import HeaderRight from '@/components/HeaderRight';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import './globals.css';
 
 import { APP_NAME, TAGLINE } from '@/lib/appConfig';
-import Providers from './providers'; // <-- wraps with <SessionProvider>
+import Providers from './providers'; // <SessionProvider>
 
 export const metadata: Metadata = {
   title: {
@@ -27,19 +28,19 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-zinc-950 text-zinc-100">
+      <body className="min-h-screen antialiased">
         <Providers>
-          {/* Simple header with brand linking home */}
-          <header className="border-b border-zinc-800">
+          <header className="sticky top-0 z-40 border-b border-emerald-200/60 bg-white/60 backdrop-blur supports-[backdrop-filter]:bg-white/50">
             <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
               <Link
                 href="/"
-                className="rounded text-lg font-semibold tracking-tight hover:opacity-90 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                className="rounded text-lg font-semibold tracking-tight text-emerald-700 hover:text-emerald-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
               >
                 {APP_NAME}
               </Link>
-              {/* space for right-side actions if you add any later */}
-              <div />
+
+              {/* right actions */}
+              <HeaderRight />
             </div>
           </header>
 

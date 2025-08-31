@@ -1,23 +1,75 @@
 /* app/globals.css */
-@import "tailwindcss";
+@import 'tailwindcss';
 
+/* ===== Base (light, fresh gradient) ===== */
 @layer base {
-  html, body { height: 100%; }
-  /* lighter than zinc-950: */
-  body { @apply bg-slate-900 text-slate-100 antialiased; }
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    /* soft glassy background */
+    @apply bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 text-slate-800 antialiased;
+  }
+
+  ::selection {
+    @apply bg-emerald-200 text-slate-900;
+  }
 }
 
+/* ===== Components (glassy cards, rounded-2xl controls) ===== */
 @layer components {
-  /* centered container */
-  .container-app { @apply mx-auto w-full max-w-4xl px-4 sm:px-6 md:px-8; }
+  /* Card: frosted glass */
+  .card {
+    @apply rounded-2xl border border-emerald-200/60 bg-white/70 p-5 shadow-[0_8px_30px_rgba(0,0,0,0.06)] backdrop-blur supports-[backdrop-filter]:bg-white/60;
+  }
 
-  /* lighter cards/borders */
-  .card     { @apply rounded-2xl border border-slate-700 bg-slate-800/60 p-4 shadow-sm; }
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-white/80 px-3.5 py-2 text-sm font-medium text-slate-800 shadow-sm ring-1 ring-slate-300/60 hover:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none active:bg-white/90;
+  }
 
-  /* buttons: add subtle fill by default */
-  .btn      { @apply inline-flex items-center justify-center rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium transition hover:bg-slate-700 active:scale-[.99]; }
+  .btn-primary {
+    @apply bg-emerald-600 text-white shadow ring-0 hover:bg-emerald-700 active:bg-emerald-800;
+  }
 
-  /* inputs/textarea: lighter fill + clearer focus ring */
-  .input    { @apply w-full rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500; }
-  .textarea { @apply w-full rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500; }
+  .btn-danger {
+    @apply bg-rose-600 text-white shadow ring-0 hover:bg-rose-700 active:bg-rose-800;
+  }
+
+  .btn-outline {
+    @apply bg-transparent text-slate-800 ring-1 ring-slate-300 hover:bg-white;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-emerald-700 ring-1 ring-emerald-300/60 hover:bg-emerald-50;
+  }
+
+  /* Inputs (pill-ish, glass) */
+  .input {
+    @apply w-full rounded-xl border border-slate-300/60 bg-white/80 px-3.5 py-2 backdrop-blur placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 focus:outline-none;
+  }
+
+  .textarea {
+    @apply w-full rounded-xl border border-slate-300/60 bg-white/80 px-3.5 py-2 backdrop-blur focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 focus:outline-none;
+  }
+
+  /* Filter chips */
+  .chip {
+    @apply rounded-full border border-emerald-300/70 bg-white/70 px-3 py-1 text-sm text-emerald-800 hover:bg-emerald-50;
+  }
+  .chip-active {
+    @apply border-emerald-500 bg-emerald-100 text-emerald-900;
+  }
+
+  /* Links */
+  .link {
+    @apply text-emerald-700 underline underline-offset-2 hover:text-emerald-800;
+  }
+
+  /* Small stat pill (optional helper for metrics) */
+  .stat {
+    @apply inline-flex items-center rounded-full bg-emerald-600/10 px-2.5 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-500/30;
+  }
 }

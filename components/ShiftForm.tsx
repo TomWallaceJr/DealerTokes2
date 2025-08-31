@@ -140,7 +140,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
     <div className="card space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <label className="text-xs text-slate-400">Date</label>
+          <label className="text-xs text-slate-600">Date</label>
           <input
             className="input"
             type="date"
@@ -150,7 +150,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
         </div>
 
         <div>
-          <label className="text-xs text-slate-400">Casino / Room</label>
+          <label className="text-xs text-slate-600">Casino / Room</label>
           <input
             className="input"
             list="rooms-suggest"
@@ -167,7 +167,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
 
         {/* Clock In (15-minute steps + on-blur normalization) */}
         <div>
-          <label className="text-xs text-slate-400">Clock In</label>
+          <label className="text-xs text-slate-600">Clock In</label>
           <input
             className="input h-11"
             type="time"
@@ -183,7 +183,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
 
         {/* Clocked Out */}
         <div>
-          <label className="text-xs text-slate-400">Clocked Out</label>
+          <label className="text-xs text-slate-600">Clocked Out</label>
           <input
             className="input h-11"
             type="time"
@@ -198,7 +198,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
 
         {/* Auto-calculated Hours (read-only) */}
         <div>
-          <label className="text-xs text-slate-400">Hours Worked</label>
+          <label className="text-xs text-slate-600">Hours Worked</label>
           <input
             className="input"
             type="text"
@@ -214,7 +214,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
 
         {/* Cash Downs */}
         <div>
-          <label className="text-xs text-slate-400">Cash Downs</label>
+          <label className="text-xs text-slate-600">Cash Downs</label>
           <input
             className="input"
             type="number"
@@ -227,7 +227,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
 
         {/* Cash Tokes ($ inside the input) */}
         <div>
-          <label className="text-xs text-slate-400">Cash Tokes</label>
+          <label className="text-xs text-slate-600">Cash Tokes</label>
           <div className="relative">
             <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400">
               $
@@ -249,7 +249,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
       </div>
 
       <div>
-        <label className="text-xs text-slate-400">Notes</label>
+        <label className="text-xs text-slate-600">Notes</label>
         <textarea
           className="textarea"
           rows={3}
@@ -258,17 +258,24 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
         />
       </div>
 
-      <div className="flex flex-col gap-2 text-sm text-slate-300 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
         <div>
           Total Cash Tokes: {money(tokesCash)} • $/h: {perHour.toFixed(2)} • $/down:{' '}
           {perDown.toFixed(2)}
         </div>
         <div className="flex w-full gap-2 sm:w-auto">
-          <button className="btn w-full sm:w-auto" onClick={save} disabled={saveDisabled}>
+          <button
+            className="btn btn-primary w-full sm:w-auto"
+            onClick={save}
+            disabled={saveDisabled}
+          >
             {saving ? 'Saving...' : 'Save Shift'}
           </button>
-          {/* NEW: Cancel → go to homepage */}
-          <button className="btn w-full sm:w-auto" type="button" onClick={() => router.push('/')}>
+          <button
+            className="btn btn-outline w-full sm:w-auto"
+            type="button"
+            onClick={() => router.push('/')}
+          >
             Cancel
           </button>
         </div>

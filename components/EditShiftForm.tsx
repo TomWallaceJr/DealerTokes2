@@ -118,7 +118,7 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
     <div className="card space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <label className="text-xs text-slate-400">Date</label>
+          <label className="text-xs text-slate-600">Date</label>
           <input
             className="input"
             type="date"
@@ -128,12 +128,12 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
         </div>
 
         <div>
-          <label className="text-xs text-slate-400">Casino / Room</label>
+          <label className="text-xs text-slate-600">Casino / Room</label>
           <input className="input" value={casino} onChange={(e) => setCasino(e.target.value)} />
         </div>
 
         <div>
-          <label className="text-xs text-slate-400">Clock In</label>
+          <label className="text-xs text-slate-600">Clock In</label>
           <input
             className="input h-11"
             type="time"
@@ -146,7 +146,7 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
         </div>
 
         <div>
-          <label className="text-xs text-slate-400">Clocked Out</label>
+          <label className="text-xs text-slate-600">Clocked Out</label>
           <input
             className="input h-11"
             type="time"
@@ -159,7 +159,7 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
         </div>
 
         <div>
-          <label className="text-xs text-slate-400">Hours Worked (auto)</label>
+          <label className="text-xs text-slate-600">Hours Worked (auto)</label>
           <input
             className="input"
             type="text"
@@ -170,7 +170,7 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
         </div>
 
         <div>
-          <label className="text-xs text-slate-400">Cash Downs</label>
+          <label className="text-xs text-slate-600">Cash Downs</label>
           <input
             className="input"
             type="number"
@@ -182,7 +182,7 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
         </div>
 
         <div>
-          <label className="text-xs text-slate-400">Cash Tokes</label>
+          <label className="text-xs text-slate-600">Cash Tokes</label>
           <div className="relative">
             <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400">
               $
@@ -208,7 +208,7 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
       </div>
 
       <div>
-        <label className="text-xs text-slate-400">Notes</label>
+        <label className="text-xs text-slate-600">Notes</label>
         <textarea
           className="textarea"
           rows={3}
@@ -217,25 +217,18 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
         />
       </div>
 
-      <div className="flex flex-col gap-2 text-sm text-slate-300 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
         <div>
           $/h: {perHour.toFixed(2)} • $/down: {perDown.toFixed(2)}
         </div>
         <div className="flex gap-2">
-          <button className="btn" onClick={save} disabled={saving}>
+          <button className="btn btn-primary" onClick={save} disabled={saving}>
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
-
-          {/* NEW: Cancel → go to homepage */}
-          <button className="btn w-full sm:w-auto" type="button" onClick={() => router.push('/')}>
+          <button className="btn btn-outline" type="button" onClick={() => router.push('/')}>
             Cancel
           </button>
-
-          <button
-            className="btn border-red-700 hover:bg-red-800/40"
-            onClick={remove}
-            disabled={deleting}
-          >
+          <button className="btn btn-danger" onClick={remove} disabled={deleting}>
             {deleting ? 'Deleting...' : 'Delete'}
           </button>
         </div>

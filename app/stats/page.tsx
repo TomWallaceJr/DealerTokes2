@@ -178,30 +178,30 @@ export default function StatsPage() {
     <main className="space-y-4">
       {/* Header with name */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{who}&apos;s Income</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">{who}&apos;s Income</h1>
         <div className="flex gap-2">
-          <button className="btn" onClick={load} disabled={loading}>
+          <button className="btn btn-primary" onClick={load} disabled={loading}>
             {loading ? 'Refreshing...' : 'Apply Filters'}
           </button>
-          <button className="btn" onClick={reset} disabled={loading}>
+          <button className="btn btn-outline" onClick={reset} disabled={loading}>
             Reset
           </button>
         </div>
       </div>
 
-      {/* YTD line */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 text-sm">
+      {/* YTD line (glassy pill) */}
+      <div className="rounded-2xl border border-emerald-200/60 bg-white/70 p-3 text-sm shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
         {ytdErr ? (
-          <span className="text-red-400">{ytdErr}</span>
+          <span className="text-rose-600">{ytdErr}</span>
         ) : (
-          <>
-            <span className="mr-2 text-zinc-400">YTD ({now.getFullYear()}):</span>
-            <span className="mr-3 font-medium">{money(ytd?.total ?? 0)}</span>
-            <span className="text-zinc-400">•</span>
-            <span className="mx-3 font-medium">${num(ytd?.hourly ?? 0)} / h</span>
-            <span className="text-zinc-400">•</span>
-            <span className="ml-3 font-medium">${num(ytd?.perDown ?? 0)} / down</span>
-          </>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="stat">YTD {now.getFullYear()}</span>
+            <span className="font-medium text-slate-900">{money(ytd?.total ?? 0)}</span>
+            <span className="text-slate-400">•</span>
+            <span className="font-medium text-slate-800">${num(ytd?.hourly ?? 0)} / h</span>
+            <span className="text-slate-400">•</span>
+            <span className="font-medium text-slate-800">${num(ytd?.perDown ?? 0)} / down</span>
+          </div>
         )}
       </div>
 
@@ -209,7 +209,7 @@ export default function StatsPage() {
       <div className="card">
         <div className="grid gap-3 sm:grid-cols-4">
           <div>
-            <label className="text-xs text-slate-400">Year</label>
+            <label className="text-xs text-slate-600">Year</label>
             <select className="input" value={year} onChange={(e) => setYear(e.target.value)}>
               {yearOpts.map((y) => (
                 <option key={y.v || 'all'} value={y.v}>
@@ -220,7 +220,7 @@ export default function StatsPage() {
           </div>
 
           <div>
-            <label className="text-xs text-slate-400">Month</label>
+            <label className="text-xs text-slate-600">Month</label>
             <select className="input" value={month} onChange={(e) => setMonth(e.target.value)}>
               {MONTHS.map((m) => (
                 <option key={m.v || 'all'} value={m.v}>
@@ -231,19 +231,14 @@ export default function StatsPage() {
           </div>
 
           <div>
-            <label className="text-xs text-slate-400">Day(s) of Week</label>
+            <label className="text-xs text-slate-600">Day(s) of Week</label>
             <div className="flex flex-wrap gap-2">
               {DOW.map((d) => (
                 <button
                   key={d.v}
                   type="button"
                   onClick={() => toggleDow(d.v)}
-                  className={
-                    'rounded border px-2 py-1 text-sm ' +
-                    (selectedDows.includes(d.v)
-                      ? 'border-indigo-500 bg-indigo-500/20'
-                      : 'border-slate-600 hover:bg-slate-800/50')
-                  }
+                  className={`chip ${selectedDows.includes(d.v) ? 'chip-active' : ''}`}
                 >
                   {d.l}
                 </button>
@@ -252,7 +247,7 @@ export default function StatsPage() {
           </div>
 
           <div>
-            <label className="text-xs text-slate-400">Casino / Room</label>
+            <label className="text-xs text-slate-600">Casino / Room</label>
             <div className="flex flex-wrap gap-2">
               {rooms.length === 0 && <div className="text-xs text-slate-500">No rooms yet</div>}
               {rooms.map((r) => (
@@ -260,12 +255,7 @@ export default function StatsPage() {
                   key={r}
                   type="button"
                   onClick={() => toggleRoom(r)}
-                  className={
-                    'rounded border px-2 py-1 text-sm ' +
-                    (selectedRooms.includes(r)
-                      ? 'border-indigo-500 bg-indigo-500/20'
-                      : 'border-slate-600 hover:bg-slate-800/50')
-                  }
+                  className={`chip ${selectedRooms.includes(r) ? 'chip-active' : ''}`}
                 >
                   {r}
                 </button>
@@ -275,45 +265,45 @@ export default function StatsPage() {
         </div>
       </div>
 
-      {err && <div className="text-sm text-red-400">{err}</div>}
-      {loading && !sum && <div className="text-sm text-zinc-400">Loading…</div>}
+      {err && <div className="text-sm text-rose-600">{err}</div>}
+      {loading && !sum && <div className="text-sm text-slate-500">Loading…</div>}
 
       {/* Summary tiles (filtered) */}
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="card">
-          <div className="text-xs text-zinc-400">Total Tokes</div>
-          <div className="text-2xl font-bold">{money(total)}</div>
+          <div className="text-xs text-slate-600">Total Tokes</div>
+          <div className="text-2xl font-bold text-slate-900">{money(total)}</div>
         </div>
         <div className="card">
-          <div className="text-xs text-zinc-400">Total Hours</div>
-          <div className="text-2xl font-bold">{compact(hours, 2)}</div>
+          <div className="text-xs text-slate-600">Total Hours</div>
+          <div className="text-2xl font-bold text-slate-900">{compact(hours, 2)}</div>
         </div>
         <div className="card">
-          <div className="text-xs text-zinc-400">Avg $/h</div>
-          <div className="text-2xl font-bold">{num(hourly, 2)}</div>
+          <div className="text-xs text-slate-600">Avg $/h</div>
+          <div className="text-2xl font-bold text-slate-900">{num(hourly, 2)}</div>
         </div>
       </div>
 
       {/* Downs tiles */}
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="card">
-          <div className="text-xs text-zinc-400">Total Downs</div>
-          <div className="text-2xl font-bold">{compact(downs, 1)}</div>
+          <div className="text-xs text-slate-600">Total Downs</div>
+          <div className="text-2xl font-bold text-slate-900">{compact(downs, 1)}</div>
         </div>
         <div className="card">
-          <div className="text-xs text-zinc-400">Avg $/down</div>
-          <div className="text-2xl font-bold">{num(perDown, 2)}</div>
+          <div className="text-xs text-slate-600">Avg $/down</div>
+          <div className="text-2xl font-bold text-slate-900">{num(perDown, 2)}</div>
         </div>
         <div className="card">
-          <div className="text-xs text-zinc-400">Total Shifts</div>
-          <div className="text-2xl font-bold">{compact(sum?.count ?? 0, 1)}</div>
+          <div className="text-xs text-slate-600">Total Shifts</div>
+          <div className="text-2xl font-bold text-slate-900">{compact(shiftCount, 1)}</div>
         </div>
       </div>
 
-      {/* Optional: per-room breakdown (filtered) */}
+      {/* Per-room breakdown (filtered) */}
       {sum?.breakdowns?.byCasino && Object.keys(sum.breakdowns.byCasino).length > 0 && (
         <div className="card">
-          <h2 className="mb-2 text-lg font-medium">By Room</h2>
+          <h2 className="mb-2 text-lg font-semibold text-slate-900">By Room</h2>
           <div className="grid gap-2">
             {Object.entries(sum.breakdowns.byCasino).map(([room, v]) => {
               const perH = v.hours > 0 ? v.total / v.hours : 0;
@@ -321,11 +311,11 @@ export default function StatsPage() {
               return (
                 <div
                   key={room}
-                  className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 text-sm"
+                  className="rounded-2xl border border-emerald-200/60 bg-white/70 p-3 text-sm shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60"
                 >
                   <div className="flex flex-wrap justify-between gap-2">
-                    <div className="font-medium">{room}</div>
-                    <div className="text-zinc-400">
+                    <div className="font-medium text-slate-900">{room}</div>
+                    <div className="text-slate-600">
                       {money(v.total)} • {compact(v.hours, 2)}h • {compact(v.downs)} downs • $
                       {num(perH, 2)}/h • ${num(perD, 2)}/down • {compact(v.count)} shifts
                     </div>
