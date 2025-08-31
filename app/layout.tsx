@@ -2,8 +2,28 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import SignOutButton from "@/components/SignOutButton";
 import BackButton from "@/components/BackButton";
+import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import { APP_NAME, TAGLINE } from "@/lib/appConfig";
+
+export const metadata: Metadata = {
+  title: {
+    default: `${APP_NAME} • ${TAGLINE}`,
+    template: `%s • ${APP_NAME}`,
+  },
+  description: TAGLINE,
+  openGraph: {
+    title: APP_NAME,
+    description: TAGLINE,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: APP_NAME,
+    description: TAGLINE,
+  },
+};
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -14,8 +34,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <div className="container-app py-4">
         <header className="pb-6 flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-semibold">DealerTokes</h1>
-              <p className="text-sm text-zinc-400">Track your tokes and hours.</p>
+              <h1 className="text-2xl font-semibold">{APP_NAME}</h1>
+              <p className="text-sm text-zinc-400">Every down counted. Every dollar tracked.</p>
             </div>
 
             {/* Only show Sign out if logged in; no Sign in / Create here */}

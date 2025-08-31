@@ -1,5 +1,7 @@
 {
-  "name": "dealertokes",
+  
+  "name": "downcount",
+  "description": "DownCount – track poker downs, tokes, and income.",
   "version": "0.1.0",
   "private": true,
   "scripts": {
