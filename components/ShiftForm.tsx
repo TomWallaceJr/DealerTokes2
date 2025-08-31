@@ -1,23 +1,26 @@
 // components/ShiftForm.tsx
-"use client";
-import { useEffect, useState } from "react";
+'use client';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
+  const router = useRouter();
+
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [casino, setCasino] = useState<string>("");
+  const [casino, setCasino] = useState<string>('');
 
   // Native time inputs (mobile shows wheel/scroller)
-  const [clockIn, setClockIn] = useState<string>("");   // "HH:MM" (24h)
-  const [clockOut, setClockOut] = useState<string>(""); // "HH:MM"
+  const [clockIn, setClockIn] = useState<string>(''); // "HH:MM" (24h)
+  const [clockOut, setClockOut] = useState<string>(''); // "HH:MM"
 
   // Derived hours (read-only)
   const [hours, setHours] = useState<number>(0);
 
   // MVP fields
-  const [downs, setDowns] = useState<number>(0);                 // Cash Downs
-  const [tokesCashStr, setTokesCashStr] = useState<string>("0"); // Cash Tokes (string for clear-on-focus)
+  const [downs, setDowns] = useState<number>(0); // Cash Downs
+  const [tokesCashStr, setTokesCashStr] = useState<string>('0'); // Cash Tokes (string for clear-on-focus)
 
-  const [notes, setNotes] = useState<string>("");
+  const [notes, setNotes] = useState<string>('');
   const [saving, setSaving] = useState<boolean>(false);
   const [rooms, setRooms] = useState<string[]>([]);
 
@@ -25,7 +28,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/rooms");
+        const res = await fetch('/api/rooms');
         if (!res.ok) return;
         const data = await res.json();
         if (Array.isArray(data.rooms)) setRooms(data.rooms);
@@ -34,32 +37,32 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
   }, []);
 
   // Helpers
-  const money = (n: number) => n.toLocaleString(undefined, { style: "currency", currency: "USD" });
+  const money = (n: number) => n.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
   const intFrom = (s: string) => {
-    const n = parseInt(s || "0", 10);
+    const n = parseInt(s || '0', 10);
     return Number.isFinite(n) ? n : 0;
   };
 
   // Parse "HH:MM" -> minutes past midnight
   function toMinutes(hhmm: string): number | null {
     if (!/^\d{2}:\d{2}$/.test(hhmm)) return null;
-    const [hh, mm] = hhmm.split(":").map(Number);
+    const [hh, mm] = hhmm.split(':').map(Number);
     if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
     return hh * 60 + mm;
   }
 
   // Snap any time string to nearest 15 minutes (00/15/30/45)
   function normalizeTimeQuarter(hhmm: string): string {
-    if (!/^\d{2}:\d{2}$/.test(hhmm)) return "";
-    let [hh, mm] = hhmm.split(":").map((v) => parseInt(v, 10));
-    if (!(hh >= 0 && hh <= 23) || !(mm >= 0 && mm <= 59)) return "";
+    if (!/^\d{2}:\d{2}$/.test(hhmm)) return '';
+    let [hh, mm] = hhmm.split(':').map((v) => parseInt(v, 10));
+    if (!(hh >= 0 && hh <= 23) || !(mm >= 0 && mm <= 59)) return '';
     let snapped = Math.round(mm / 15) * 15;
     if (snapped === 60) {
       hh = (hh + 1) % 24;
       snapped = 0;
     }
-    const HH = String(hh).padStart(2, "0");
-    const MM = String(snapped).padStart(2, "0");
+    const HH = String(hh).padStart(2, '0');
+    const MM = String(snapped).padStart(2, '0');
     return `${HH}:${MM}`;
   }
 
@@ -74,15 +77,15 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
     let duration = end - start;
     if (duration <= 0) duration += 24 * 60; // if out ≤ in, treat as next day
     const h = duration / 60;
-    setHours(Math.round(h * 4) / 4); // nearest 0.25h
+    setHours(Math.round(h * 4) / 4); // round to nearest 0.25h
   }, [clockIn, clockOut]);
 
   // Cash Tokes clear-on-focus UX
   const clearOnFocus = (value: string, setter: (v: string) => void) => () => {
-    if (value === "0") setter("");
+    if (value === '0') setter('');
   };
   const zeroOnBlur = (value: string, setter: (v: string) => void) => () => {
-    if (value.trim() === "") setter("0");
+    if (value.trim() === '') setter('0');
   };
 
   // Preview metrics (cash tokes only for MVP)
@@ -91,8 +94,8 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
   const perDown = downs > 0 ? tokesCash / downs : 0;
 
   async function save() {
-    if (!clockIn || !clockOut || hours <= 0) {
-      alert("Please select valid Clock In and Clocked Out times.");
+    if (!casino.trim() || !clockIn || !clockOut || hours <= 0) {
+      alert('Please select valid Clock In/Out times and enter a Casino.');
       return;
     }
     setSaving(true);
@@ -100,33 +103,31 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
       const payload = {
         date,
         casino: casino.trim(),
-        clockIn,         // "HH:MM"
-        clockOut,        // "HH:MM"
-        hours,       // derived
-        tokesCash,   // int ($)
-        downs,       // int
-        // hourly/tournament omitted in MVP → server defaults to 0
+        clockIn, // "HH:MM"
+        clockOut, // "HH:MM"
+        hours, // derived (server will also compute)
+        tokesCash, // int ($)
+        downs, // int
         notes: notes || undefined,
       };
 
-      const res = await fetch("/api/shifts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Save failed");
+      if (!res.ok) throw new Error('Save failed');
 
-      // add new room to local suggestions
       const c = casino.trim();
       if (c && !rooms.includes(c)) setRooms((p) => [...p, c].sort((a, b) => a.localeCompare(b)));
 
       // reset (keep date)
-      setCasino("");
-      setClockIn("");
-      setClockOut("");
+      setCasino('');
+      setClockIn('');
+      setClockOut('');
       setDowns(0);
-      setTokesCashStr("0");
-      setNotes("");
+      setTokesCashStr('0');
+      setNotes('');
       onSaved?.();
     } finally {
       setSaving(false);
@@ -137,10 +138,15 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
 
   return (
     <div className="card space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="text-xs text-slate-400">Date</label>
-          <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input
+            className="input"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
         </div>
 
         <div>
@@ -165,8 +171,8 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
           <input
             className="input h-11"
             type="time"
-            step={900}      // 900s = 15 minutes (00/15/30/45)
-            lang="en-US"    // AM/PM on many browsers; mobile shows wheel
+            step={900} // 15-minute increments
+            lang="en-US"
             value={clockIn}
             onChange={(e) => setClockIn(e.target.value)}
             onBlur={(e) => setClockIn(normalizeTimeQuarter(e.target.value))}
@@ -193,9 +199,16 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
         {/* Auto-calculated Hours (read-only) */}
         <div>
           <label className="text-xs text-slate-400">Hours Worked</label>
-          <input className="input" type="text" value={hours.toFixed(2)} readOnly aria-readonly="true" />
+          <input
+            className="input"
+            type="text"
+            value={hours.toFixed(2)}
+            readOnly
+            aria-readonly="true"
+          />
           <div className="mt-1 text-[11px] text-slate-500">
-            Calculated from Clock In/Out. If out ≤ in, it rolls to next day; shift remains on the selected date.
+            Calculated from Clock In/Out. If out ≤ in, it rolls to next day; shift remains on the
+            selected date.
           </div>
         </div>
 
@@ -208,7 +221,7 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
             step="1"
             min="0"
             value={downs}
-            onChange={(e) => setDowns(parseInt(e.target.value || "0"))}
+            onChange={(e) => setDowns(parseInt(e.target.value || '0'))}
           />
         </div>
 
@@ -216,7 +229,9 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
         <div>
           <label className="text-xs text-slate-400">Cash Tokes</label>
           <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+            <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400">
+              $
+            </span>
             <input
               className="input pl-6"
               inputMode="numeric"
@@ -235,16 +250,28 @@ export default function ShiftForm({ onSaved }: { onSaved?: () => void }) {
 
       <div>
         <label className="text-xs text-slate-400">Notes</label>
-        <textarea className="textarea" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <textarea
+          className="textarea"
+          rows={3}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-slate-300">
+      <div className="flex flex-col gap-2 text-sm text-slate-300 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          Total Cash Tokes: {money(tokesCash)} • $/h: {perHour.toFixed(2)} • $/down: {perDown.toFixed(2)}
+          Total Cash Tokes: {money(tokesCash)} • $/h: {perHour.toFixed(2)} • $/down:{' '}
+          {perDown.toFixed(2)}
         </div>
-        <button className="btn w-full sm:w-auto" onClick={save} disabled={saveDisabled}>
-          {saving ? "Saving..." : "Save Shift"}
-        </button>
+        <div className="flex w-full gap-2 sm:w-auto">
+          <button className="btn w-full sm:w-auto" onClick={save} disabled={saveDisabled}>
+            {saving ? 'Saving...' : 'Save Shift'}
+          </button>
+          {/* NEW: Cancel → go to homepage */}
+          <button className="btn w-full sm:w-auto" type="button" onClick={() => router.push('/')}>
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   );

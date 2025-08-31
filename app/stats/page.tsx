@@ -1,15 +1,16 @@
 // app/stats/page.tsx
 'use client';
 
+import { useSession } from 'next-auth/react';
 import { useEffect, useMemo, useState } from 'react';
 
 type Summary = {
-  total: number;
-  hours: number;
-  downs: number;
-  hourly: number;
-  perDown: number;
-  count: number;
+  total: number; // sum tokesCash
+  hours: number; // sum hours
+  downs: number; // sum downs
+  hourly: number; // total / hours
+  perDown: number; // total / downs
+  count: number; // # of shifts
   breakdowns?: {
     byCasino?: Record<string, { total: number; hours: number; downs: number; count: number }>;
   };
@@ -41,19 +42,57 @@ const DOW = [
   { v: 0, l: 'Sun' },
 ];
 
+/** $1,234.56 */
+const money = (n: number, digits = 0) =>
+  new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: digits,
+  }).format(n);
+
+/** 1.2K / 3.4M */
+const compact = (n: number, digits = 1) =>
+  new Intl.NumberFormat(undefined, {
+    notation: 'compact',
+    maximumFractionDigits: digits,
+  }).format(n);
+
+/** 2 decimal places */
+const num = (n: number, digits = 2) =>
+  new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(n);
+
+function displayName(name?: string | null, email?: string | null) {
+  const n = (name ?? '').trim();
+  if (n) return n.split(/\s+/)[0];
+  if (email) return email.split('@')[0];
+  return 'there';
+}
+
 export default function StatsPage() {
   const now = new Date();
+  const { data: session } = useSession();
+  const who = displayName(session?.user?.name, session?.user?.email);
+
+  // Filters
   const [year, setYear] = useState<string>('');
   const [month, setMonth] = useState<string>('');
   const [selectedDows, setSelectedDows] = useState<number[]>([]);
   const [rooms, setRooms] = useState<string[]>([]);
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
 
+  // Data state (filtered)
   const [sum, setSum] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Build 10-year list ending this year
+  // YTD state (independent of filters)
+  const [ytd, setYtd] = useState<Summary | null>(null);
+  const [ytdErr, setYtdErr] = useState<string | null>(null);
+
+  // Year dropdown (last 10 years)
   const yearOpts = useMemo(() => {
     const y = now.getFullYear();
     const arr = [{ v: '', l: 'All years' }];
@@ -61,15 +100,17 @@ export default function StatsPage() {
     return arr;
   }, [now]);
 
+  // Load room suggestions
   useEffect(() => {
-    // load room suggestions (you already have /api/rooms)
     (async () => {
       try {
         const res = await fetch('/api/rooms', { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         if (Array.isArray(data.rooms)) setRooms(data.rooms);
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     })();
   }, []);
 
@@ -95,6 +136,7 @@ export default function StatsPage() {
       if (month) params.set('month', month);
       if (selectedDows.length) params.set('dow', selectedDows.join(','));
       for (const r of selectedRooms) params.append('casino', r);
+
       const res = await fetch(`/api/shifts/summary?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: Summary = await res.json();
@@ -106,8 +148,22 @@ export default function StatsPage() {
     }
   }
 
+  // Load filtered and YTD on mount
   useEffect(() => {
-    load(); // initial load (unfiltered)
+    load();
+    (async () => {
+      try {
+        const cy = String(now.getFullYear());
+        const res = await fetch(`/api/shifts/summary?year=${encodeURIComponent(cy)}`, {
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: Summary = await res.json();
+        setYtd(data);
+      } catch {
+        setYtdErr('Failed to load YTD.');
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -116,12 +172,13 @@ export default function StatsPage() {
   const downs = sum?.downs ?? 0;
   const hourly = sum?.hourly ?? 0;
   const perDown = sum?.perDown ?? 0;
-  const money = (n: number) => n.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+  const shiftCount = sum?.count ?? 0;
 
   return (
     <main className="space-y-4">
+      {/* Header with name */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Income Stats</h1>
+        <h1 className="text-2xl font-semibold">{who}&apos;s Income</h1>
         <div className="flex gap-2">
           <button className="btn" onClick={load} disabled={loading}>
             {loading ? 'Refreshing...' : 'Apply Filters'}
@@ -130,6 +187,22 @@ export default function StatsPage() {
             Reset
           </button>
         </div>
+      </div>
+
+      {/* YTD line */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 text-sm">
+        {ytdErr ? (
+          <span className="text-red-400">{ytdErr}</span>
+        ) : (
+          <>
+            <span className="mr-2 text-zinc-400">YTD ({now.getFullYear()}):</span>
+            <span className="mr-3 font-medium">{money(ytd?.total ?? 0)}</span>
+            <span className="text-zinc-400">•</span>
+            <span className="mx-3 font-medium">${num(ytd?.hourly ?? 0)} / h</span>
+            <span className="text-zinc-400">•</span>
+            <span className="ml-3 font-medium">${num(ytd?.perDown ?? 0)} / down</span>
+          </>
+        )}
       </div>
 
       {/* Filters */}
@@ -205,7 +278,7 @@ export default function StatsPage() {
       {err && <div className="text-sm text-red-400">{err}</div>}
       {loading && !sum && <div className="text-sm text-zinc-400">Loading…</div>}
 
-      {/* Summary tiles */}
+      {/* Summary tiles (filtered) */}
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="card">
           <div className="text-xs text-zinc-400">Total Tokes</div>
@@ -213,11 +286,11 @@ export default function StatsPage() {
         </div>
         <div className="card">
           <div className="text-xs text-zinc-400">Total Hours</div>
-          <div className="text-2xl font-bold">{hours.toFixed(2)}</div>
+          <div className="text-2xl font-bold">{compact(hours, 2)}</div>
         </div>
         <div className="card">
           <div className="text-xs text-zinc-400">Avg $/h</div>
-          <div className="text-2xl font-bold">{hourly.toFixed(2)}</div>
+          <div className="text-2xl font-bold">{num(hourly, 2)}</div>
         </div>
       </div>
 
@@ -225,26 +298,26 @@ export default function StatsPage() {
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="card">
           <div className="text-xs text-zinc-400">Total Downs</div>
-          <div className="text-2xl font-bold">{downs}</div>
+          <div className="text-2xl font-bold">{compact(downs, 1)}</div>
         </div>
         <div className="card">
           <div className="text-xs text-zinc-400">Avg $/down</div>
-          <div className="text-2xl font-bold">{perDown.toFixed(2)}</div>
+          <div className="text-2xl font-bold">{num(perDown, 2)}</div>
         </div>
         <div className="card">
           <div className="text-xs text-zinc-400">Total Shifts</div>
-          <div className="text-2xl font-bold">{sum?.count ?? 0}</div>
+          <div className="text-2xl font-bold">{compact(sum?.count ?? 0, 1)}</div>
         </div>
       </div>
 
-      {/* Optional: per-room breakdown */}
+      {/* Optional: per-room breakdown (filtered) */}
       {sum?.breakdowns?.byCasino && Object.keys(sum.breakdowns.byCasino).length > 0 && (
         <div className="card">
           <h2 className="mb-2 text-lg font-medium">By Room</h2>
           <div className="grid gap-2">
             {Object.entries(sum.breakdowns.byCasino).map(([room, v]) => {
-              const $h = v.hours > 0 ? v.total / v.hours : 0;
-              const $d = v.downs > 0 ? v.total / v.downs : 0;
+              const perH = v.hours > 0 ? v.total / v.hours : 0;
+              const perD = v.downs > 0 ? v.total / v.downs : 0;
               return (
                 <div
                   key={room}
@@ -253,8 +326,8 @@ export default function StatsPage() {
                   <div className="flex flex-wrap justify-between gap-2">
                     <div className="font-medium">{room}</div>
                     <div className="text-zinc-400">
-                      ${v.total} • {v.hours.toFixed(2)}h • {v.downs} downs • ${$h.toFixed(2)}/h • $
-                      {$d.toFixed(2)}/down • {v.count} shifts
+                      {money(v.total)} • {compact(v.hours, 2)}h • {compact(v.downs)} downs • $
+                      {num(perH, 2)}/h • ${num(perD, 2)}/down • {compact(v.count)} shifts
                     </div>
                   </div>
                 </div>
