@@ -1,10 +1,15 @@
 // components/HomeQuickActions.tsx
 'use client';
 
+import type { Route } from 'next';
 import Link from 'next/link';
+import React from 'react';
+import type { UrlObject } from 'url';
+
+type Href = Route | UrlObject;
 
 type CardProps = {
-  href: string;
+  href: Href;
   title: string;
   subtitle: string;
   accent?: 'emerald' | 'sky' | 'indigo';
@@ -32,10 +37,10 @@ function ActionCard({ href, title, subtitle, accent = 'emerald', icon }: CardPro
       prefetch={false}
       className={[
         'relative block rounded-2xl bg-white/70 backdrop-blur',
-        'border border-white/60 ring-1', // base ring
-        accentRing, // colored ring
+        'border border-white/60 ring-1',
+        accentRing,
         'shadow-[0_8px_30px_rgba(0,0,0,0.06)]',
-        'transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus:ring-2 focus:outline-none',
+        'transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus:ring-2 focus:ring-emerald-500 focus:outline-none',
         'p-4',
       ].join(' ')}
       aria-label={title}
@@ -65,25 +70,37 @@ export default function HomeQuickActions() {
   return (
     <div className="grid gap-4 sm:grid-cols-3">
       <ActionCard
-        href="/shifts/new" // ← adjust if your route differs
+        href={'/shifts/new' as Route}
         title="New Shift"
         subtitle="Log a shift now"
         accent="emerald"
         icon={
-          // plus icon
-          <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" fill="none">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            fill="none"
+            aria-hidden="true"
+          >
             <path d="M12 5v14M5 12h14" strokeWidth="2" strokeLinecap="round" />
           </svg>
         }
       />
       <ActionCard
-        href="/shifts"
+        href={'/shifts' as Route}
         title="Recent Shifts"
         subtitle="View / edit your last entries"
         accent="sky"
         icon={
-          // list icon
-          <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" fill="none">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            fill="none"
+            aria-hidden="true"
+          >
             <path
               d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"
               strokeWidth="2"
@@ -93,13 +110,19 @@ export default function HomeQuickActions() {
         }
       />
       <ActionCard
-        href="/stats"
+        href={'/stats' as Route}
         title="Income Stats"
         subtitle="Totals, $/h and $/down"
         accent="indigo"
         icon={
-          // chart icon
-          <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" fill="none">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            fill="none"
+            aria-hidden="true"
+          >
             <path d="M3 3v18h18" strokeWidth="2" strokeLinecap="round" />
             <path d="M7 15l4-4 3 3 5-6" strokeWidth="2" strokeLinecap="round" />
           </svg>
