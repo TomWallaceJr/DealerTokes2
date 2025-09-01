@@ -1,5 +1,5 @@
 // app/page.tsx
-import CalendarPicker from '@/components/CalenderPicker';
+import CalendarPicker from '@/components/CalendarPicker';
 import DemoSignInButton from '@/components/DemoSignInButton';
 import HomeQuickActions from '@/components/HomeQuickActions';
 import { authOptions } from '@/lib/auth';
