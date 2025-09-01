@@ -13,35 +13,15 @@ function ymdToUTCDate(ymd: unknown): Date {
   return new Date(Date.UTC(y, m - 1, d));
 }
 
-/** Parse "HH:MM" → { h, m } or throw */
-function parseHHMM(v: unknown): { h: number; m: number } {
-  if (typeof v !== 'string' || !/^\d{2}:\d{2}$/.test(v)) {
-    throw new Error('Time must be HH:MM');
-  }
-  const [h, m] = v.split(':').map(Number);
-  if (h < 0 || h > 23 || m < 0 || m > 59) throw new Error('Time out of range');
-  return { h, m };
+/** Round to nearest 0.25 */
+function roundQuarter(n: number) {
+  return Math.round(n * 4) / 4;
 }
 
-/** Build a UTC DateTime from a UTC date (midnight) + "HH:MM" */
-function datePlusTimeUTC(baseUTCDate: Date, hhmm: string): Date {
-  const { h, m } = parseHHMM(hhmm);
-  return new Date(
-    Date.UTC(
-      baseUTCDate.getUTCFullYear(),
-      baseUTCDate.getUTCMonth(),
-      baseUTCDate.getUTCDate(),
-      h,
-      m,
-    ),
-  );
-}
-
-/** Hours (rounded to nearest 0.25) between two DateTimes (UTC) */
-function hoursBetweenRoundQuarter(start: Date, end: Date): number {
-  const ms = end.getTime() - start.getTime();
-  const h = ms / 3_600_000;
-  return Math.round(h * 4) / 4;
+function toNonNegInt(v: unknown): number {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.round(n);
 }
 
 export async function GET(req: Request) {
@@ -86,9 +66,22 @@ export async function GET(req: Request) {
     }
   }
 
+  // Select ONLY fields we care about (no clockIn/clockOut anywhere)
   const superset = await prisma.shift.findMany({
     where,
     orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+    select: {
+      id: true,
+      userId: true,
+      date: true,
+      casino: true,
+      hours: true,
+      downs: true,
+      tokesCash: true,
+      notes: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
   // In-memory DOW and "month across all years" filters
@@ -123,13 +116,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { date, casino, clockIn, clockOut, tokesCash, downs, notes } = body ?? {};
+  const { date, casino, hours, tokesCash, downs, notes } = body ?? {};
   if (!date) return NextResponse.json({ error: 'date is required' }, { status: 400 });
   if (typeof casino !== 'string' || !casino.trim()) {
     return NextResponse.json({ error: 'casino is required' }, { status: 400 });
   }
 
-  // Normalize date + times
+  // Normalize date
   let dateUtc: Date;
   try {
     dateUtc = ymdToUTCDate(date); // UTC midnight
@@ -137,54 +130,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid date (YYYY-MM-DD)' }, { status: 400 });
   }
 
-  let inDT: Date, outDT: Date;
-  try {
-    inDT = datePlusTimeUTC(dateUtc, clockIn);
-    outDT = datePlusTimeUTC(dateUtc, clockOut);
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Invalid time(s)' }, { status: 400 });
+  // Normalize numbers (server rounds to 0.25)
+  const hoursNum = roundQuarter(Number(hours));
+  const downsNum = roundQuarter(Number(downs ?? 0));
+  const tokesCents = toNonNegInt(tokesCash);
+
+  if (!Number.isFinite(hoursNum) || hoursNum <= 0) {
+    return NextResponse.json({ error: 'hours must be a positive number' }, { status: 400 });
+  }
+  if (!Number.isFinite(downsNum) || downsNum < 0) {
+    return NextResponse.json({ error: 'downs must be ≥ 0' }, { status: 400 });
   }
 
-  // Overnight handling: if out ≤ in, move out to next day (still counts for the selected date)
-  if (outDT <= inDT) {
-    outDT = new Date(
-      Date.UTC(
-        dateUtc.getUTCFullYear(),
-        dateUtc.getUTCMonth(),
-        dateUtc.getUTCDate() + 1,
-        outDT.getUTCHours(),
-        outDT.getUTCMinutes(),
-      ),
-    );
-  }
-
-  const hours = hoursBetweenRoundQuarter(inDT, outDT);
-  if (hours <= 0)
-    return NextResponse.json({ error: 'Computed hours must be > 0' }, { status: 400 });
-
+  // Create WITHOUT any clockIn/clockOut
   const row = await prisma.shift.create({
     data: {
       userId: session.user.id,
-      date: dateUtc, // ✅ stored as UTC midnight
+      date: dateUtc, // stored as UTC midnight
       casino: casino.trim(),
-      clockIn: inDT, // ✅ stored as DateTime
-      clockOut: outDT, // ✅ stored as DateTime
-      hours,
-      tokesCash: Number(tokesCash ?? 0),
-      downs: Number(downs ?? 0),
+      hours: hoursNum,
+      downs: downsNum,
+      tokesCash: tokesCents,
       notes: typeof notes === 'string' && notes.trim() ? notes : null,
     },
     select: {
       id: true,
       date: true,
       casino: true,
-      clockIn: true,
-      clockOut: true,
       hours: true,
-      tokesCash: true,
       downs: true,
+      tokesCash: true,
       notes: true,
       createdAt: true,
+      updatedAt: true,
     },
   });
 

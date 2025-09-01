@@ -27,11 +27,10 @@ export default function ShiftForm({
   }, [initialDate]);
 
   const [casino, setCasino] = useState<string>('');
-  const [clockIn, setClockIn] = useState<string>(''); // "HH:MM"
-  const [clockOut, setClockOut] = useState<string>(''); // "HH:MM"
+  // removed: clockIn / clockOut
   const [hours, setHours] = useState<number>(0);
   const [downs, setDowns] = useState<number>(0);
-  const [tokesCashStr, setTokesCashStr] = useState<string>('0');
+  const [tokesCashStr, setTokesCashStr] = useState<string>('0'); // cents, as before
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,36 +47,6 @@ export default function ShiftForm({
     })();
   }, []);
 
-  function toMinutes(hhmm: string): number | null {
-    if (!/^\d{2}:\d{2}$/.test(hhmm)) return null;
-    const [hh, mm] = hhmm.split(':').map(Number);
-    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
-    return hh * 60 + mm;
-  }
-  function normalizeTimeQuarter(hhmm: string): string {
-    if (!/^\d{2}:\d{2}$/.test(hhmm)) return '';
-    let [hh, mm] = hhmm.split(':').map((v) => parseInt(v, 10));
-    if (!(hh >= 0 && hh <= 23) || !(mm >= 0 && mm <= 59)) return '';
-    let snapped = Math.round(mm / 15) * 15;
-    if (snapped === 60) {
-      hh = (hh + 1) % 24;
-      snapped = 0;
-    }
-    return `${String(hh).padStart(2, '0')}:${String(snapped).padStart(2, '0')}`;
-  }
-
-  useEffect(() => {
-    const s = toMinutes(clockIn);
-    const e = toMinutes(clockOut);
-    if (s == null || e == null) {
-      setHours(0);
-      return;
-    }
-    let dur = e - s;
-    if (dur <= 0) dur += 24 * 60; // overnight
-    setHours(Math.round((dur / 60) * 4) / 4);
-  }, [clockIn, clockOut]);
-
   const tokesCash = Number.isFinite(parseInt(tokesCashStr, 10)) ? parseInt(tokesCashStr, 10) : 0;
 
   const perHour = hours > 0 ? tokesCash / hours : 0;
@@ -85,8 +54,8 @@ export default function ShiftForm({
 
   async function save() {
     setError(null);
-    if (!casino.trim() || !clockIn || !clockOut || hours <= 0) {
-      setError('Please enter a room and valid clock in/out times.');
+    if (!casino.trim() || hours <= 0) {
+      setError('Please enter a room and a positive number of hours.');
       return;
     }
     setSaving(true);
@@ -94,9 +63,8 @@ export default function ShiftForm({
       const payload = {
         date, // ✅ keep the selected "YYYY-MM-DD"
         casino: casino.trim(),
-        clockIn, // "HH:MM"
-        clockOut, // "HH:MM"
-        hours, // server recomputes too
+        // removed: clockIn / clockOut
+        hours, // server will round to 0.25
         tokesCash,
         downs,
         notes: notes || undefined,
@@ -121,12 +89,100 @@ export default function ShiftForm({
     }
   }
 
-  const saveDisabled = saving || !casino.trim() || !clockIn || !clockOut || hours <= 0;
+  const saveDisabled = saving || !casino.trim() || hours <= 0;
 
   return (
     <div className="card space-y-4">
-      {/* form content unchanged, using date state */}
-      {/* ... keep your fields ... */}
+      {/* Date */}
+      <div>
+        <label className="block text-sm font-medium">Date</label>
+        <input
+          type="date"
+          className="input"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          required
+        />
+      </div>
+
+      {/* Casino / Room (datalist) */}
+      <div>
+        <label className="block text-sm font-medium">Casino / Room</label>
+        <input
+          list="rooms"
+          className="input"
+          placeholder="Wind Creek"
+          value={casino}
+          onChange={(e) => setCasino(e.target.value)}
+          required
+        />
+        <datalist id="rooms">
+          {rooms.map((r) => (
+            <option key={r} value={r} />
+          ))}
+        </datalist>
+      </div>
+
+      {/* Hours / Downs / Tokes */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <label className="block text-sm font-medium">Hours Worked</label>
+          <input
+            type="number"
+            className="input"
+            step={0.25}
+            min={0.25}
+            inputMode="decimal"
+            value={Number.isFinite(hours) ? hours : 0}
+            onChange={(e) => setHours(Number(e.target.value))}
+            placeholder="0"
+            required
+          />
+          {/* Styling unchanged; no error text unless needed */}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">Downs Dealt</label>
+          <input
+            type="number"
+            className="input"
+            step={0.25}
+            min={0}
+            inputMode="decimal"
+            value={Number.isFinite(downs) ? downs : 0}
+            onChange={(e) => setDowns(Number(e.target.value))}
+            placeholder="0"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">Cash Tokes (¢)</label>
+          <input
+            type="number"
+            className="input"
+            step={1}
+            min={0}
+            inputMode="numeric"
+            value={tokesCashStr}
+            onChange={(e) => setTokesCashStr(e.target.value)}
+            placeholder="0"
+          />
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div>
+        <label className="block text-sm font-medium">Notes</label>
+        <textarea
+          className="textarea"
+          rows={3}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Optional"
+        />
+      </div>
+
+      {/* Footer row (unchanged styling) */}
       <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="text-slate-600">
           Total: ${tokesCash} • $/h: {perHour.toFixed(2)} • $/down: {perDown.toFixed(2)}
@@ -144,6 +200,7 @@ export default function ShiftForm({
           </button>
         </div>
       </div>
+
       {error && <div className="text-sm text-rose-600">{error}</div>}
     </div>
   );

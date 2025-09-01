@@ -7,11 +7,10 @@ type ShiftForEdit = {
   id: string;
   date: string; // "YYYY-MM-DD"
   casino: string;
+  hours: number; // quarter increments
   downs: number;
-  tokesCash: number;
+  tokesCash: number; // cents
   notes: string;
-  clockIn: string; // "HH:MM" (24h)
-  clockOut: string; // "HH:MM"
 };
 
 export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
@@ -19,54 +18,24 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
 
   const [date, setDate] = useState(shift.date);
   const [casino, setCasino] = useState(shift.casino);
-  const [clockIn, setClockIn] = useState(shift.clockIn);
-  const [clockOut, setClockOut] = useState(shift.clockOut);
-  const [downs, setDowns] = useState<number>(shift.downs);
-  const [tokesCashStr, setTokesCashStr] = useState<string>(String(shift.tokesCash));
+  const [hours, setHours] = useState<number>(Number(shift.hours ?? 0));
+  const [downs, setDowns] = useState<number>(Number(shift.downs ?? 0));
+  const [tokesCashStr, setTokesCashStr] = useState<string>(String(shift.tokesCash ?? 0)); // cents (string)
   const [notes, setNotes] = useState<string>(shift.notes ?? '');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Enforce 15-min steps on blur
-  function normalizeTimeQuarter(hhmm: string): string {
-    if (!/^\d{2}:\d{2}$/.test(hhmm)) return '';
-    let [hh, mm] = hhmm.split(':').map((v) => parseInt(v, 10));
-    if (!(hh >= 0 && hh <= 23) || !(mm >= 0 && mm <= 59)) return '';
-    let snapped = Math.round(mm / 15) * 15;
-    if (snapped === 60) {
-      hh = (hh + 1) % 24;
-      snapped = 0;
-    }
-    return `${String(hh).padStart(2, '0')}:${String(snapped).padStart(2, '0')}`;
-  }
-
-  function toMinutes(hhmm: string): number | null {
-    if (!/^\d{2}:\d{2}$/.test(hhmm)) return null;
-    const [hh, mm] = hhmm.split(':').map(Number);
-    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
-    return hh * 60 + mm;
-  }
-
-  const hours = useMemo(() => {
-    const s = toMinutes(clockIn);
-    const e = toMinutes(clockOut);
-    if (s == null || e == null) return 0;
-    let dur = e - s;
-    if (dur <= 0) dur += 24 * 60; // overnight
-    return Math.round((dur / 60) * 4) / 4; // nearest 0.25h
-  }, [clockIn, clockOut]);
-
   const tokesCash = useMemo(() => {
     const n = parseInt(tokesCashStr || '0', 10);
-    return Number.isFinite(n) ? n : 0;
+    return Number.isFinite(n) ? n : 0; // cents
   }, [tokesCashStr]);
 
-  const perHour = hours > 0 ? tokesCash / hours : 0;
-  const perDown = downs > 0 ? tokesCash / downs : 0;
+  const perHour = hours > 0 ? tokesCash / hours : 0; // cents per hour (display unchanged)
+  const perDown = downs > 0 ? tokesCash / downs : 0; // cents per down  (display unchanged)
 
   async function save() {
-    if (!casino.trim() || !clockIn || !clockOut || hours <= 0) {
-      alert('Please complete all required fields.');
+    if (!casino.trim() || !(hours > 0)) {
+      alert('Please enter a room and a positive number of hours.');
       return;
     }
     setSaving(true);
@@ -77,9 +46,8 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
         body: JSON.stringify({
           date,
           casino: casino.trim(),
-          clockIn,
-          clockOut,
-          tokesCash,
+          hours, // ✅ hours-only update
+          tokesCash, // ✅ cents
           downs,
           notes: notes || undefined,
         }),
@@ -132,52 +100,31 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
           <input className="input" value={casino} onChange={(e) => setCasino(e.target.value)} />
         </div>
 
+        {/* Replaces clock-in/out with direct hours entry */}
         <div>
-          <label className="text-xs text-slate-600">Clock In</label>
-          <input
-            className="input h-11"
-            type="time"
-            step={900}
-            lang="en-US"
-            value={clockIn}
-            onChange={(e) => setClockIn(e.target.value)}
-            onBlur={(e) => setClockIn(normalizeTimeQuarter(e.target.value))}
-          />
-        </div>
-
-        <div>
-          <label className="text-xs text-slate-600">Clocked Out</label>
-          <input
-            className="input h-11"
-            type="time"
-            step={900}
-            lang="en-US"
-            value={clockOut}
-            onChange={(e) => setClockOut(e.target.value)}
-            onBlur={(e) => setClockOut(normalizeTimeQuarter(e.target.value))}
-          />
-        </div>
-
-        <div>
-          <label className="text-xs text-slate-600">Hours Worked (auto)</label>
-          <input
-            className="input"
-            type="text"
-            value={hours.toFixed(2)}
-            readOnly
-            aria-readonly="true"
-          />
-        </div>
-
-        <div>
-          <label className="text-xs text-slate-600">Cash Downs</label>
+          <label className="text-xs text-slate-600">Hours Worked</label>
           <input
             className="input"
             type="number"
-            step="1"
-            min="0"
-            value={downs}
-            onChange={(e) => setDowns(parseInt(e.target.value || '0'))}
+            step={0.25}
+            min={0.25}
+            inputMode="decimal"
+            value={Number.isFinite(hours) ? hours : 0}
+            onChange={(e) => setHours(Number(e.target.value))}
+            placeholder="0"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-slate-600">Downs</label>
+          <input
+            className="input"
+            type="number"
+            step={0.25}
+            min={0}
+            inputMode="decimal"
+            value={Number.isFinite(downs) ? downs : 0}
+            onChange={(e) => setDowns(Number(e.target.value))}
           />
         </div>
 

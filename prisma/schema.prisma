@@ -1,3 +1,4 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,14 +8,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/**
- * ------------ App models ------------
- */
+/** ------------ App models ------------ */
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
   name         String?
-  passwordHash String? // for credentials login
+  passwordHash String?
   createdAt    DateTime @default(now())
 
   // Relations
@@ -24,23 +23,14 @@ model User {
 }
 
 model Shift {
-  id     String   @id @default(cuid())
-  userId String
-  date   DateTime
-  casino String
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime            // store UTC midnight by convention
+  casino    String
 
-  hours Float
-
-  tokesCash Int @default(0)
-  downs     Int @default(0)
-
-  tournamentDowns       Int   @default(0)
-  tournamentRatePerDown Float @default(0)
-  hourlyRate            Float @default(0)
-
-  // NEW (nullable to migrate safely)
-  clockIn  DateTime?
-  clockOut DateTime?
+  hours     Float               // quarter increments (.25)
+  tokesCash Int      @default(0)
+  downs     Float    @default(0) // quarter increments (.25)
 
   notes     String?
   createdAt DateTime @default(now())
@@ -48,12 +38,15 @@ model Shift {
 
   user User @relation(fields: [userId], references: [id])
 
+  // Ensure one shift per date per user (your date router relies on this)
+  @@unique([userId, date])
+
+  // Helpful indexes
+  @@index([userId, createdAt])
   @@index([userId, date])
 }
 
-/**
- * ------------ NextAuth / Auth.js models ------------
- */
+/** ------------ NextAuth / Auth.js models ------------ */
 model Account {
   id                String  @id @default(cuid())
   userId            String

@@ -7,28 +7,14 @@ import EditShiftForm from '@/components/EditShiftForm';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-function pad(n: number) {
-  return String(n).padStart(2, '0');
-}
 function toYmd(v: unknown): string {
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   if (typeof v === 'string') return v;
   return '';
 }
-function toHhmm(v: unknown): string {
-  if (!v) return '';
-  if (v instanceof Date) return `${pad(v.getHours())}:${pad(v.getMinutes())}`;
-  if (typeof v === 'string') {
-    if (/^\d{2}:\d{2}$/.test(v)) return v;
-    const d = new Date(v);
-    if (!isNaN(d.getTime())) return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    return v;
-  }
-  return '';
-}
 
 export default async function EditShiftPage({ params }: { params: Promise<{ id: string }> }) {
-  // ⬇️ New: await params
+  // Next 15: await params
   const { id } = await params;
 
   const session = await getServerSession(authOptions);
@@ -40,11 +26,11 @@ export default async function EditShiftPage({ params }: { params: Promise<{ id: 
       id: true,
       date: true,
       casino: true,
+      hours: true, // ✅ hours only
       downs: true,
       tokesCash: true,
       notes: true,
-      clockIn: true,
-      clockOut: true,
+      // removed: clockIn, clockOut
     },
   });
 
@@ -54,11 +40,10 @@ export default async function EditShiftPage({ params }: { params: Promise<{ id: 
     id: row.id,
     date: toYmd(row.date), // "YYYY-MM-DD"
     casino: row.casino,
-    downs: row.downs,
+    hours: Number(row.hours ?? 0), // ✅ ensure number (handles Decimal)
+    downs: Number(row.downs ?? 0),
     tokesCash: row.tokesCash,
     notes: row.notes ?? '',
-    clockIn: toHhmm(row.clockIn), // "HH:MM"
-    clockOut: toHhmm(row.clockOut), // "HH:MM"
   };
 
   return (

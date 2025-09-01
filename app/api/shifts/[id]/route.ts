@@ -13,33 +13,16 @@ function ymdToUTCDate(ymd: unknown): Date {
   return new Date(Date.UTC(y, m - 1, d));
 }
 
-/** Parse "HH:MM" → { h, m } or throw */
-function parseHHMM(v: unknown): { h: number; m: number } {
-  if (typeof v !== 'string' || !/^\d{2}:\d{2}$/.test(v)) throw new Error('Time must be HH:MM');
-  const [h, m] = v.split(':').map(Number);
-  if (h < 0 || h > 23 || m < 0 || m > 59) throw new Error('Time out of range');
-  return { h, m };
+/** Round to nearest 0.25 */
+function roundQuarter(n: number) {
+  return Math.round(n * 4) / 4;
 }
 
-/** Build UTC DateTime from UTC date + "HH:MM" */
-function datePlusTimeUTC(baseUTCDate: Date, hhmm: string): Date {
-  const { h, m } = parseHHMM(hhmm);
-  return new Date(
-    Date.UTC(
-      baseUTCDate.getUTCFullYear(),
-      baseUTCDate.getUTCMonth(),
-      baseUTCDate.getUTCDate(),
-      h,
-      m,
-    ),
-  );
-}
-
-/** Hours rounded to 0.25 */
-function hoursBetweenRoundQuarter(start: Date, end: Date): number {
-  const ms = end.getTime() - start.getTime();
-  const h = ms / 3_600_000;
-  return Math.round(h * 4) / 4;
+function toNonNegInt(v: unknown): number | undefined {
+  if (v === undefined) return undefined;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.round(n);
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -54,13 +37,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       id: true,
       date: true,
       casino: true,
-      clockIn: true,
-      clockOut: true,
       hours: true,
       tokesCash: true,
       downs: true,
       notes: true,
       createdAt: true,
+      updatedAt: true,
     },
   });
 
@@ -81,81 +63,77 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  // We need current to compute effective times if only one piece is provided
-  const current = await prisma.shift.findFirst({
-    where: { id, userId: session.user.id },
-    select: { date: true, clockIn: true, clockOut: true },
-  });
-  if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // Build partial update payload (no time-of-day fields at all)
+  const data: any = {};
 
-  // Determine base (effective) date
-  let effectiveDate = current.date;
   if (typeof body.date === 'string') {
     try {
-      effectiveDate = ymdToUTCDate(body.date);
+      data.date = ymdToUTCDate(body.date); // keep UTC midnight convention
     } catch {
-      return NextResponse.json({ error: 'Invalid date' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid date (YYYY-MM-DD)' }, { status: 400 });
     }
   }
 
-  // Build effective times
-  // If provided in body as "HH:MM" → reconstruct DateTime on the effective date
-  // If not, keep existing but shift to the effective date (preserve time-of-day)
-  function hhmmFromDT(dt: Date): string {
-    const h = String(dt.getUTCHours()).padStart(2, '0');
-    const m = String(dt.getUTCMinutes()).padStart(2, '0');
-    return `${h}:${m}`;
+  if (typeof body.casino === 'string') {
+    const c = body.casino.trim();
+    if (!c) return NextResponse.json({ error: 'casino cannot be empty' }, { status: 400 });
+    data.casino = c;
   }
 
-  const inHHMM =
-    typeof body.clockIn === 'string' ? body.clockIn : hhmmFromDT(current.clockIn as Date);
-  const outHHMM =
-    typeof body.clockOut === 'string' ? body.clockOut : hhmmFromDT(current.clockOut as Date);
-
-  let inDT: Date, outDT: Date;
-  try {
-    inDT = datePlusTimeUTC(effectiveDate, inHHMM);
-    outDT = datePlusTimeUTC(effectiveDate, outHHMM);
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Invalid time(s)' }, { status: 400 });
+  if (body.hours !== undefined) {
+    const h = roundQuarter(Number(body.hours));
+    if (!Number.isFinite(h) || h <= 0) {
+      return NextResponse.json({ error: 'hours must be a positive number' }, { status: 400 });
+    }
+    data.hours = h;
   }
 
-  // Overnight
-  if (outDT <= inDT) {
-    outDT = new Date(
-      Date.UTC(
-        effectiveDate.getUTCFullYear(),
-        effectiveDate.getUTCMonth(),
-        effectiveDate.getUTCDate() + 1,
-        outDT.getUTCHours(),
-        outDT.getUTCMinutes(),
-      ),
-    );
+  if (body.downs !== undefined) {
+    const d = roundQuarter(Number(body.downs));
+    if (!Number.isFinite(d) || d < 0) {
+      return NextResponse.json({ error: 'downs must be ≥ 0' }, { status: 400 });
+    }
+    data.downs = d;
   }
 
-  const hours = hoursBetweenRoundQuarter(inDT, outDT);
-  if (hours <= 0)
-    return NextResponse.json({ error: 'Computed hours must be > 0' }, { status: 400 });
+  if (body.tokesCash !== undefined) {
+    const cents = toNonNegInt(body.tokesCash);
+    if (cents === undefined) {
+      return NextResponse.json({ error: 'tokesCash is invalid' }, { status: 400 });
+    }
+    data.tokesCash = cents;
+  }
 
-  const updated = await prisma.shift.update({
-    where: { id },
-    data: {
-      date: effectiveDate, // ✅ keep date at UTC midnight
-      clockIn: inDT, // ✅ DateTime
-      clockOut: outDT, // ✅ DateTime
-      hours,
-      // Optional updates
-      casino: typeof body.casino === 'string' ? body.casino.trim() : undefined,
-      tokesCash: Number.isFinite(body.tokesCash) ? Number(body.tokesCash) : undefined,
-      downs: Number.isFinite(body.downs) ? Number(body.downs) : undefined,
-      notes: typeof body.notes === 'string' ? body.notes.trim() || null : undefined,
-    },
+  if (body.notes !== undefined) {
+    if (typeof body.notes === 'string') {
+      data.notes = body.notes.trim() || null;
+    } else if (body.notes === null) {
+      data.notes = null;
+    }
+  }
+
+  // Nothing to update?
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: 'No updatable fields provided' }, { status: 400 });
+  }
+
+  // Ownership-safe update
+  const updated = await prisma.shift.updateMany({
+    where: { id, userId: session.user.id },
+    data,
+  });
+
+  if (updated.count === 0) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  // Return the fresh row (no clockIn/clockOut in response)
+  const row = await prisma.shift.findFirst({
+    where: { id, userId: session.user.id },
     select: {
       id: true,
       date: true,
       casino: true,
-      clockIn: true,
-      clockOut: true,
       hours: true,
       tokesCash: true,
       downs: true,
@@ -164,7 +142,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     },
   });
 
-  return NextResponse.json(updated);
+  return NextResponse.json(row);
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
