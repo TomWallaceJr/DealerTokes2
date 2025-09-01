@@ -162,7 +162,7 @@ export default function ShiftForm({
           <p className="mt-0.5 text-xs text-slate-600">Quick add your hours, downs, and cashout.</p>
         </div>
         {/* Top-right back button (icon-only on mobile) */}
-        <BackButton className="hidden sm:inline-flex" />
+        <BackButton className="sm:inline-flex" />
       </div>
 
       {/* Date + Casino in one row on sm+ */}

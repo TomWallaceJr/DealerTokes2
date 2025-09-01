@@ -1,6 +1,7 @@
 // app/stats/page.tsx
 'use client';
 
+import BackButton from '@/components/BackButton';
 import { dateUTC } from '@/lib/date';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
@@ -399,7 +400,12 @@ export default function StatsPage() {
 
       {/* Quick Filters */}
       <div className="card">
-        <div className="mb-2 text-sm font-medium text-slate-900">Quick Filters</div>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="text-sm font-medium text-slate-900">Quick Filters</div>
+          <BackButton />
+        </div>
+
+        {/* Chips */}
         <div className="flex flex-wrap gap-2">
           {(['all', 'ytd', 'curMonth', 'lastMonth', 'curWeek', 'lastWeek'] as QuickKey[]).map(
             (k) => {

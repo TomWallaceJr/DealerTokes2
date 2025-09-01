@@ -1,6 +1,7 @@
 // app/auth/signup/page.tsx
 'use client';
 
+import BackButton from '@/components/BackButton';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -83,11 +84,20 @@ export default function SignUpPage() {
   return (
     <main className="mx-auto max-w-md">
       <div className="card space-y-4">
-        <header>
-          <h1 className="text-xl font-semibold text-slate-900">Create your account</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            One minute to set up. You can edit everything later.
-          </p>
+        <header className="mb-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold text-slate-900">Create your account</h1>
+              <p className="mt-1 text-sm text-slate-600">
+                One minute to set up. You can edit everything later.
+              </p>
+            </div>
+
+            {/* Right-aligned Back */}
+            <div className="-mt-1 shrink-0">
+              <BackButton />
+            </div>
+          </div>
         </header>
 
         {err && (
