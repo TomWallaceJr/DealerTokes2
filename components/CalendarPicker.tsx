@@ -1,6 +1,7 @@
 // components/CalendarPicker.tsx
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 type Shift = { id: string; date: string; tokesCash: number };
@@ -12,10 +13,14 @@ type PageResp = {
   offset: number;
 };
 
-type Props = {
+export type CalendarPickerProps = {
+  /** Optional initial month; defaults to today */
   initialMonth?: Date | string;
+  /** Optional hook when user picks a date (YYYY-MM-DD, local) */
   onPick?: (isoYmd: string) => void;
 };
+
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
 const money = (n: number) =>
   new Intl.NumberFormat(undefined, {
@@ -24,12 +29,10 @@ const money = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-
 function pad(n: number) {
   return String(n).padStart(2, '0');
 }
-function ymd(d: Date) {
+function ymdLocal(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 function startOfMonth(d: Date) {
@@ -40,8 +43,8 @@ function endOfMonthExclusive(d: Date) {
 }
 function mondayOf(d: Date) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const day = x.getDay(); // 0..6
-  const delta = (day + 6) % 7; // Mon = 0
+  const day = x.getDay(); // 0..6 (Sun..Sat)
+  const delta = (day + 6) % 7; // Monday=0
   x.setDate(x.getDate() - delta);
   x.setHours(0, 0, 0, 0);
   return x;
@@ -52,7 +55,9 @@ function addDays(d: Date, n: number) {
   return x;
 }
 
-export default function CalendarPicker({ initialMonth, onPick }: Props) {
+export default function CalendarPicker({ initialMonth, onPick }: CalendarPickerProps) {
+  const router = useRouter();
+
   const today = useMemo(() => new Date(), []);
   const initial =
     typeof initialMonth === 'string'
@@ -64,9 +69,12 @@ export default function CalendarPicker({ initialMonth, onPick }: Props) {
   const [cursor, setCursor] = useState<Date>(startOfMonth(initial));
   const monthLabel = cursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
+  // Day aggregates by YYYY-MM-DD (no Date parsing to avoid TZ drift)
   const [cashByDay, setCashByDay] = useState<Record<string, number>>({});
+  const [shiftsByDay, setShiftsByDay] = useState<Record<string, Shift[]>>({});
   const [loading, setLoading] = useState(false);
 
+  // 6-row grid (Mon–Sun)
   const gridStart = useMemo(() => mondayOf(startOfMonth(cursor)), [cursor]);
   const gridDays = useMemo(
     () => Array.from({ length: 42 }, (_, i) => addDays(gridStart, i)),
@@ -77,8 +85,8 @@ export default function CalendarPicker({ initialMonth, onPick }: Props) {
     (async () => {
       setLoading(true);
       try {
-        const from = ymd(startOfMonth(cursor));
-        const to = ymd(endOfMonthExclusive(cursor));
+        const from = ymdLocal(startOfMonth(cursor));
+        const to = ymdLocal(endOfMonthExclusive(cursor));
         const res = await fetch(
           `/api/shifts?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=1000`,
           { cache: 'no-store' },
@@ -87,13 +95,21 @@ export default function CalendarPicker({ initialMonth, onPick }: Props) {
         const data: PageResp = await res.json();
 
         const cash: Record<string, number> = {};
+        const byDay: Record<string, Shift[]> = {};
+
+        // IMPORTANT: use the date string’s first 10 chars (YYYY-MM-DD). No Date()
         for (const s of data.items) {
-          const k = s.date.slice(0, 10);
+          const k = (s.date || '').slice(0, 10);
+          if (!k) continue;
           cash[k] = (cash[k] ?? 0) + (s.tokesCash ?? 0);
+          (byDay[k] ||= []).push(s);
         }
+
         setCashByDay(cash);
+        setShiftsByDay(byDay);
       } catch {
         setCashByDay({});
+        setShiftsByDay({});
       } finally {
         setLoading(false);
       }
@@ -107,6 +123,17 @@ export default function CalendarPicker({ initialMonth, onPick }: Props) {
 
   const inCurrentMonth = (d: Date) =>
     d.getMonth() === cursor.getMonth() && d.getFullYear() === cursor.getFullYear();
+
+  function handlePick(key: string) {
+    onPick?.(key);
+
+    const list = shiftsByDay[key] || [];
+    if (list.length === 0) {
+      router.push(`/shifts/new?date=${encodeURIComponent(key)}`);
+    } else {
+      router.push(`/shifts/${list[0].id}`);
+    }
+  }
 
   return (
     <div className="card">
@@ -130,9 +157,6 @@ export default function CalendarPicker({ initialMonth, onPick }: Props) {
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
             >
               <path d="M15 18l-6-6 6-6" />
             </svg>
@@ -162,9 +186,6 @@ export default function CalendarPicker({ initialMonth, onPick }: Props) {
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
             >
               <path d="M9 6l6 6-6 6" />
             </svg>
@@ -184,7 +205,7 @@ export default function CalendarPicker({ initialMonth, onPick }: Props) {
       {/* Days */}
       <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-2">
         {gridDays.map((d) => {
-          const key = ymd(d);
+          const key = ymdLocal(d);
           const cash = cashByDay[key] ?? 0;
           const hasData = cash > 0;
 
@@ -192,7 +213,7 @@ export default function CalendarPicker({ initialMonth, onPick }: Props) {
             <button
               key={key}
               type="button"
-              onClick={() => onPick?.(key)}
+              onClick={() => handlePick(key)}
               aria-label={`${key}${hasData ? `, ${money(cash)}` : ''}`}
               className={[
                 'relative rounded-xl border border-slate-200/70 bg-white/80 shadow-sm backdrop-blur transition',
@@ -207,16 +228,14 @@ export default function CalendarPicker({ initialMonth, onPick }: Props) {
                   {d.getDate()}
                 </div>
 
+                {/* Cash (responsive): xs bottom text; sm+ centered badge */}
                 {hasData ? (
                   <>
-                    {/* XS/Mobile: plain text, no bubble, slightly smaller */}
                     <div className="absolute inset-x-1 bottom-1 flex items-end justify-center sm:hidden">
-                      <span className="text-[10px] font-semibold text-emerald-800">
+                      <span className="text-[9.5px] font-semibold text-emerald-800">
                         {money(cash)}
                       </span>
                     </div>
-
-                    {/* sm+: centered badge */}
                     <div className="absolute inset-0 hidden items-center justify-center sm:flex">
                       <span className="rounded-md bg-emerald-50 px-2 py-[2px] text-[12px] font-semibold text-emerald-900 ring-1 ring-emerald-200 md:text-sm">
                         {money(cash)}
