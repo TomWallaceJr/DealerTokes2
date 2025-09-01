@@ -3,8 +3,8 @@
 
 import { dateUTC } from '@/lib/date';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import BackButton from './BackButton';
 
 type Shift = {
   id: string;
@@ -41,7 +41,6 @@ const num = (n: number, digits = 2) =>
   }).format(n);
 
 export default function ShiftList() {
-  const router = useRouter();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -51,7 +50,10 @@ export default function ShiftList() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function fetchPage(nextOffset: number, append = false) {
-    const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(nextOffset) });
+    const params = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: String(nextOffset),
+    });
     const res = await fetch(`/api/shifts?${params.toString()}`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data: PageResp = await res.json();
@@ -104,24 +106,22 @@ export default function ShiftList() {
 
   return (
     <div className="card">
-      {/* Header */}
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Recent Shifts</h2>
-          <p className="mt-0.5 text-xs text-slate-600">Select a shift to edit or delete.</p>
+      {/* Top bar */}
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-semibold text-slate-900">Logged Shifts</h2>
+          <span className="stat hidden sm:inline-flex">Most recent first</span>
         </div>
         <div className="flex shrink-0 gap-2">
           <button className="btn" onClick={initialLoad} disabled={loading}>
-            {loading ? 'Refreshing...' : 'Refresh'}
+            {loading ? 'Refreshing…' : 'Refresh'}
           </button>
-          <Link href="/" className="btn btn-outline">
-            Back
-          </Link>
+          <BackButton />
         </div>
       </div>
 
       {error && (
-        <div className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {error}
         </div>
       )}
@@ -138,7 +138,7 @@ export default function ShiftList() {
             <div key={s.id} className="relative">
               {/* Delete button */}
               <button
-                className="absolute top-2 right-2 rounded-full p-2 text-rose-600 ring-1 ring-rose-200/70 hover:bg-rose-50 focus:ring-2 focus:ring-rose-500 focus:outline-none disabled:opacity-50"
+                className="absolute top-2 right-2 rounded-full p-2 text-rose-600 ring-1 ring-rose-200/70 transition hover:bg-rose-50 focus:ring-2 focus:ring-rose-500 focus:outline-none disabled:opacity-50"
                 title="Delete shift"
                 aria-label="Delete shift"
                 onClick={(e) => {
@@ -169,14 +169,16 @@ export default function ShiftList() {
               </button>
 
               {/* Clickable card → Edit page */}
-              <Link href={`/shifts/${s.id}`} className="block" prefetch={false}>
-                <div className="card pr-12 transition hover:shadow-md">
+              <Link href={`/shifts/${s.id}`} className="group block" prefetch={false}>
+                <div className="card pr-12 transition hover:shadow-md hover:ring-1 hover:ring-emerald-300/50">
                   <div className="flex flex-wrap items-start justify-between gap-2 text-sm">
                     <div>
-                      <div className="font-medium text-slate-900">
-                        {dateUTC(s.date)} • {s.casino}
+                      <div className="flex items-center gap-2 font-medium text-slate-900">
+                        <span>{dateUTC(s.date)}</span>
+                        <span className="text-slate-400">•</span>
+                        <span>{s.casino}</span>
                       </div>
-                      <div className="text-slate-600">
+                      <div className="mt-0.5 text-slate-600">
                         {num(s.hours, 2)}h, {s.downs} downs • {money(total)} total • ${num(perHour)}
                         /h • ${num(perDown)}/down
                       </div>
@@ -192,12 +194,14 @@ export default function ShiftList() {
         })}
 
         {shifts.length === 0 && !loading && !error && (
-          <div className="text-sm text-slate-600">No shifts yet. Log one to get started.</div>
+          <div className="rounded-xl border border-slate-200 bg-white/70 p-4 text-center text-sm text-slate-600">
+            No shifts yet. Log one to get started.
+          </div>
         )}
       </div>
 
-      {/* Bottom-right "more…" */}
-      <div className="mt-3 flex justify-end">
+      {/* Bottom "more…" */}
+      <div className="mt-4 flex justify-center">
         {hasMore && (
           <button
             onClick={loadMore}

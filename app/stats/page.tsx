@@ -33,7 +33,7 @@ type PageResp = {
   offset: number;
 };
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 8;
 
 const MONTHS = [
   { v: '', l: 'All months' },
@@ -60,6 +60,9 @@ const DOW = [
   { v: 6, l: 'Sat' },
   { v: 0, l: 'Sun' },
 ];
+
+const dowOrder = [1, 2, 3, 4, 5, 6, 0];
+const dowMap: Record<number, string> = Object.fromEntries(DOW.map((d) => [d.v, d.l]));
 
 /** $1,234 (no decimals by default) */
 const money = (n: number, digits = 0) =>
@@ -90,33 +93,107 @@ function displayName(name?: string | null, email?: string | null) {
   return 'there';
 }
 
+/** Monday-start week helpers (local) */
+function pad(n: number) {
+  return String(n).padStart(2, '0');
+}
+function ymdLocal(d: Date) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function mondayOf(date: Date) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0..6 (Sun..Sat)
+  const delta = (day + 6) % 7; // Monday=0
+  d.setDate(d.getDate() - delta);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function nextMondayOf(date: Date) {
+  const mon = mondayOf(date);
+  const next = new Date(mon);
+  next.setDate(mon.getDate() + 7);
+  return next;
+}
+function lastMondayOf(date: Date) {
+  const mon = mondayOf(date);
+  const prev = new Date(mon);
+  prev.setDate(mon.getDate() - 7);
+  return prev;
+}
+function fmtRangeShort(a: Date, b: Date) {
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  const sameYear = a.getFullYear() === b.getFullYear();
+  const left = a.toLocaleDateString(undefined, opts);
+  const right = b.toLocaleDateString(undefined, sameYear ? opts : { ...opts, year: 'numeric' });
+  return `${left}–${right}`;
+}
+function monthLabel(mv: string) {
+  return MONTHS.find((m) => m.v === mv)?.l ?? mv;
+}
+
+/** Build pretty label for specific filters */
+function prettySpecificLabel({
+  weekDate,
+  selectedDows,
+  month,
+  year,
+}: {
+  weekDate: string;
+  selectedDows: number[];
+  month: string;
+  year: string;
+}) {
+  if (weekDate) {
+    const picked = new Date(weekDate);
+    const mon = mondayOf(picked);
+    const sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    return `Week of (Mon–Sun) ${fmtRangeShort(mon, sun)}`;
+  }
+  const bits: string[] = [];
+  if (selectedDows.length) {
+    const names = dowOrder.filter((d) => selectedDows.includes(d)).map((d) => dowMap[d]);
+    if (names.length) bits.push(names.join(', '));
+  }
+  if (month) bits.push(monthLabel(month));
+  if (year) bits.push(year);
+  return bits.length ? bits.join(' • ') : 'All';
+}
+
+/** Quick filter keys */
+type QuickKey = 'all' | 'ytd' | 'curMonth' | 'lastMonth' | 'curWeek' | 'lastWeek';
+
 export default function StatsPage() {
   const now = new Date();
   const { data: session } = useSession();
   const who = displayName(session?.user?.name, session?.user?.email);
 
-  // Filters
+  // ---------- Specific Filters (main) ----------
   const [year, setYear] = useState<string>('');
   const [month, setMonth] = useState<string>('');
   const [selectedDows, setSelectedDows] = useState<number[]>([]);
   const [rooms, setRooms] = useState<string[]>([]);
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
+  const [weekDate, setWeekDate] = useState<string>(''); // "YYYY-MM-DD" (Mon–Sun window)
 
-  // Summary data
+  // Summary + list for main filters
   const [sum, setSum] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // YTD data (independent of filters)
-  const [ytd, setYtd] = useState<Summary | null>(null);
-  const [ytdErr, setYtdErr] = useState<string | null>(null);
-
-  // Filtered list state
   const [list, setList] = useState<Shift[]>([]);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [listLoading, setListLoading] = useState(false);
   const [listErr, setListErr] = useState<string | null>(null);
+  const [listBaseParams, setListBaseParams] = useState<string>(''); // used by pagination
+  const [applied, setApplied] = useState(false); // show big bubble only after user clicks Apply
+
+  // ---------- Quick Filters ----------
+  const [quick, setQuick] = useState<QuickKey>('ytd');
+  const [quickSum, setQuickSum] = useState<Summary | null>(null);
+  const [quickErr, setQuickErr] = useState<string | null>(null);
+  const [quickLoading, setQuickLoading] = useState(false);
 
   // Year dropdown (last 10 years)
   const yearOpts = useMemo(() => {
@@ -126,13 +203,52 @@ export default function StatsPage() {
     return arr;
   }, [now]);
 
-  // Build query params shared by summary + list
+  // Build params for main filters
   function buildParams(base?: Record<string, string>) {
     const params = new URLSearchParams(base);
-    if (year) params.set('year', year);
-    if (month) params.set('month', month);
+    if (weekDate) {
+      const picked = new Date(weekDate);
+      const from = mondayOf(picked);
+      const to = nextMondayOf(picked);
+      params.set('from', ymdLocal(from));
+      params.set('to', ymdLocal(to));
+    } else {
+      if (year) params.set('year', year);
+      if (month) params.set('month', month);
+    }
     if (selectedDows.length) params.set('dow', selectedDows.join(','));
     for (const r of selectedRooms) params.append('casino', r);
+    return params;
+  }
+
+  // Build params for quick filters
+  function buildQuickParams(k: QuickKey) {
+    const params = new URLSearchParams();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1; // 1..12
+    if (k === 'all') {
+      // none
+    } else if (k === 'ytd') {
+      params.set('year', String(y));
+    } else if (k === 'curMonth') {
+      params.set('year', String(y));
+      params.set('month', String(m));
+    } else if (k === 'lastMonth') {
+      const lm = m === 1 ? 12 : m - 1;
+      const ly = m === 1 ? y - 1 : y;
+      params.set('year', String(ly));
+      params.set('month', String(lm));
+    } else if (k === 'curWeek') {
+      const from = mondayOf(now);
+      const to = nextMondayOf(now);
+      params.set('from', ymdLocal(from));
+      params.set('to', ymdLocal(to));
+    } else if (k === 'lastWeek') {
+      const from = lastMondayOf(now);
+      const to = mondayOf(now);
+      params.set('from', ymdLocal(from));
+      params.set('to', ymdLocal(to));
+    }
     return params;
   }
 
@@ -159,8 +275,10 @@ export default function StatsPage() {
   function reset() {
     setYear('');
     setMonth('');
+    setWeekDate('');
     setSelectedDows([]);
     setSelectedRooms([]);
+    setApplied(false);
   }
 
   async function loadSummary() {
@@ -180,19 +298,20 @@ export default function StatsPage() {
     }
   }
 
-  async function loadList(resetList: boolean) {
+  async function loadList(resetList: boolean, baseParamsStr?: string) {
+    const base = baseParamsStr ?? (listBaseParams || buildParams().toString());
     if (resetList) {
       setList([]);
       setOffset(0);
       setHasMore(false);
       setListErr(null);
+      setListBaseParams(base);
     }
     setListLoading(true);
     try {
-      const params = buildParams({
-        limit: String(PAGE_SIZE),
-        offset: String(resetList ? 0 : offset),
-      });
+      const params = new URLSearchParams(base);
+      params.set('limit', String(PAGE_SIZE));
+      params.set('offset', String(resetList ? 0 : offset));
       const res = await fetch(`/api/shifts?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: PageResp = await res.json();
@@ -207,25 +326,40 @@ export default function StatsPage() {
   }
 
   function applyFilters() {
+    setApplied(true);
     loadSummary();
-    loadList(true);
+    const base = buildParams().toString();
+    loadList(true, base);
   }
 
-  // Initial load: filtered summary + list, and YTD (current year)
+  // Quick filter loader (also updates bottom list)
+  async function loadQuick(k: QuickKey) {
+    setQuick(k);
+    setQuickLoading(true);
+    setQuickErr(null);
+    setApplied(false); // hide big "Applied Filters" bubble when using quick chips
+    try {
+      const q = buildQuickParams(k).toString();
+      const res = await fetch(`/api/shifts/summary${q ? `?${q}` : ''}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: Summary = await res.json();
+      setQuickSum(data);
+
+      // Also refresh bottom list to quick range
+      await loadList(true, q);
+    } catch {
+      setQuickErr('Failed to load quick stats.');
+    } finally {
+      setQuickLoading(false);
+    }
+  }
+
+  // Initial load (show something, but do not mark "applied")
   useEffect(() => {
-    applyFilters();
     (async () => {
-      try {
-        const cy = String(now.getFullYear());
-        const res = await fetch(`/api/shifts/summary?year=${encodeURIComponent(cy)}`, {
-          cache: 'no-store',
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data: Summary = await res.json();
-        setYtd(data);
-      } catch {
-        setYtdErr('Failed to load YTD.');
-      }
+      await loadSummary();
+      await loadList(true, buildParams().toString());
+      await loadQuick('ytd'); // default quick chip selection
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -237,50 +371,136 @@ export default function StatsPage() {
   const perDown = sum?.perDown ?? 0;
   const shiftCount = sum?.count ?? 0;
 
+  // Pretty “Filtered by” preview (uses DOW names)
+  const filterLabel = prettySpecificLabel({ weekDate, selectedDows, month, year });
+
+  // Quick chip labels
+  const QUICK_LABEL: Record<QuickKey, string> = {
+    all: 'Lifetime',
+    ytd: 'Year to Date',
+    curMonth: 'Current Month',
+    lastMonth: 'Last Month',
+    curWeek: 'Current Week',
+    lastWeek: 'Last Week',
+  };
+
+  // List title: Specific label when applied; otherwise quick label
+  const listTitle = `${applied ? filterLabel : QUICK_LABEL[quick]} Shifts`;
+
   return (
     <main className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-900">{who}&apos;s Income</h1>
-        <div className="flex gap-2">
-          <button
-            className="btn btn-primary"
-            onClick={applyFilters}
-            disabled={loading || listLoading}
-          >
-            {loading || listLoading ? 'Applying…' : 'Apply Filters'}
-          </button>
-          <button className="btn btn-outline" onClick={reset} disabled={loading || listLoading}>
-            Reset
-          </button>
-          <Link href="/" className="btn btn-outline">
-            Home
-          </Link>
+      {/* Header (no Home button) */}
+      <div>
+        <h1 className="text-2xl font-semibold text-slate-900">Detailed Income Analysis</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          Track your income performance and drill into recent shifts.
+        </p>
+      </div>
+
+      {/* Quick Filters */}
+      <div className="card">
+        <div className="mb-2 text-sm font-medium text-slate-900">Quick Filters</div>
+        <div className="flex flex-wrap gap-2">
+          {(['all', 'ytd', 'curMonth', 'lastMonth', 'curWeek', 'lastWeek'] as QuickKey[]).map(
+            (k) => {
+              const active = quick === k;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  className={`chip ${active ? 'chip-active' : ''}`}
+                  onClick={() => loadQuick(k)}
+                  aria-pressed={active}
+                >
+                  {QUICK_LABEL[k]}
+                </button>
+              );
+            },
+          )}
+        </div>
+
+        {/* Quick results bubble — same styling, mobile-friendly 2-row layout */}
+        <div className="mt-3 rounded-2xl border border-emerald-200/60 bg-white/70 p-3 text-sm shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
+          {quickErr ? (
+            <span className="text-rose-600">{quickErr}</span>
+          ) : quickLoading ? (
+            <span className="text-slate-600">Loading…</span>
+          ) : (
+            <div className="flex flex-col gap-y-1 sm:flex-row sm:flex-wrap sm:items-center">
+              {/* xs mobile: two lines, no shifts */}
+              <div className="flex items-center gap-x-3 sm:hidden">
+                <span className="text-slate-500">{QUICK_LABEL[quick]}</span>
+                <span className="text-slate-400">•</span>
+                <span className="font-medium text-slate-900">{money(quickSum?.total ?? 0)}</span>
+              </div>
+              <div className="flex items-center gap-x-3 sm:hidden">
+                <span className="font-medium text-slate-800">
+                  ${num(quickSum?.hourly ?? 0)} / h
+                </span>
+                <span className="text-slate-400">•</span>
+                <span className="font-medium text-slate-800">
+                  ${num(quickSum?.perDown ?? 0)} / down
+                </span>
+              </div>
+
+              {/* sm+ desktop: one line with shifts */}
+              <div className="hidden flex-wrap items-center gap-x-3 sm:flex">
+                <span className="text-slate-500">{QUICK_LABEL[quick]}</span>
+                <span className="font-medium text-slate-900">{money(quickSum?.total ?? 0)}</span>
+                <span className="text-slate-400">•</span>
+                <span className="font-medium text-slate-800">
+                  ${num(quickSum?.hourly ?? 0)} / h
+                </span>
+                <span className="text-slate-400">•</span>
+                <span className="font-medium text-slate-800">
+                  ${num(quickSum?.perDown ?? 0)} / down
+                </span>
+                <span className="text-slate-400">•</span>
+                <span className="text-slate-500">{compact(quickSum?.count ?? 0)} shifts</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* YTD pill */}
-      <div className="rounded-2xl border border-emerald-200/60 bg-white/70 p-3 text-sm shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
-        {ytdErr ? (
-          <span className="text-rose-600">{ytdErr}</span>
-        ) : (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="text-slate-500">YTD {now.getFullYear()}</span>
-            <span className="font-medium text-slate-900">{money(ytd?.total ?? 0)}</span>
-            <span className="text-slate-400">•</span>
-            <span className="font-medium text-slate-800">${num(ytd?.hourly ?? 0)} / h</span>
-            <span className="text-slate-400">•</span>
-            <span className="font-medium text-slate-800">${num(ytd?.perDown ?? 0)} / down</span>
-          </div>
-        )}
-      </div>
-
-      {/* Filters */}
+      {/* Specific Filters – cleaner layout, buttons bottom-left */}
       <div className="card">
-        <div className="grid gap-3 sm:grid-cols-4">
-          <div>
+        {/* Section header */}
+        <div className="mb-3">
+          <div className="text-sm font-medium text-slate-900">Specific Filters</div>
+          <div className="text-xs text-slate-500">
+            Pick a week (Mon–Sun) or use Year/Month. Day-of-week & room chips refine results.
+          </div>
+        </div>
+
+        {/* Top row: Week / Year / Month / DOW */}
+        <div className="grid gap-3 sm:grid-cols-6">
+          {/* Week picker (Mon–Sun) */}
+          <div className="sm:col-span-2">
+            <label className="text-xs text-slate-600">Week of (Mon–Sun)</label>
+            <input
+              type="date"
+              className="input h-10"
+              value={weekDate}
+              onChange={(e) => setWeekDate(e.target.value)}
+              title="Pick any date in the week you want"
+            />
+            <div className="mt-1 text-[11px] text-slate-500">
+              Choosing a week disables Year/Month below.
+            </div>
+          </div>
+
+          {/* Year */}
+          <div className="sm:col-span-2">
             <label className="text-xs text-slate-600">Year</label>
-            <select className="input" value={year} onChange={(e) => setYear(e.target.value)}>
+            <select
+              className="input h-10"
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+              disabled={!!weekDate}
+              aria-disabled={!!weekDate}
+              title={weekDate ? 'Disabled while Week filter is active' : undefined}
+            >
               {yearOpts.map((y) => (
                 <option key={y.v || 'all'} value={y.v}>
                   {y.l}
@@ -289,9 +509,17 @@ export default function StatsPage() {
             </select>
           </div>
 
-          <div>
+          {/* Month */}
+          <div className="sm:col-span-2">
             <label className="text-xs text-slate-600">Month</label>
-            <select className="input" value={month} onChange={(e) => setMonth(e.target.value)}>
+            <select
+              className="input h-10"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              disabled={!!weekDate}
+              aria-disabled={!!weekDate}
+              title={weekDate ? 'Disabled while Week filter is active' : undefined}
+            >
               {MONTHS.map((m) => (
                 <option key={m.v || 'all'} value={m.v}>
                   {m.l}
@@ -300,82 +528,112 @@ export default function StatsPage() {
             </select>
           </div>
 
-          <div>
+          {/* DOW chips */}
+          <div className="sm:col-span-6">
             <label className="text-xs text-slate-600">Day(s) of Week</label>
-            <div className="flex flex-wrap gap-2">
-              {DOW.map((d) => (
-                <button
-                  key={d.v}
-                  type="button"
-                  onClick={() => toggleDow(d.v)}
-                  className={`chip ${selectedDows.includes(d.v) ? 'chip-active' : ''}`}
-                >
-                  {d.l}
-                </button>
-              ))}
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by day of week">
+              {DOW.map((d) => {
+                const active = selectedDows.includes(d.v);
+                return (
+                  <button
+                    key={d.v}
+                    type="button"
+                    onClick={() => toggleDow(d.v)}
+                    className={`chip ${active ? 'chip-active' : ''}`}
+                    aria-pressed={active}
+                  >
+                    {d.l}
+                  </button>
+                );
+              })}
             </div>
           </div>
+        </div>
 
-          <div>
-            <label className="text-xs text-slate-600">Casino / Room</label>
-            <div className="flex flex-wrap gap-2">
-              {rooms.length === 0 && <div className="text-xs text-slate-500">No rooms yet</div>}
-              {rooms.map((r) => (
+        {/* Divider */}
+        <div className="my-4 h-px w-full bg-slate-200/70" />
+
+        {/* Casino / Room chips */}
+        <div>
+          <label className="text-xs text-slate-600">Casino / Room</label>
+          <div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto">
+            {rooms.length === 0 && <div className="text-xs text-slate-500">No rooms yet</div>}
+            {rooms.map((r) => {
+              const active = selectedRooms.includes(r);
+              return (
                 <button
                   key={r}
                   type="button"
                   onClick={() => toggleRoom(r)}
-                  className={`chip ${selectedRooms.includes(r) ? 'chip-active' : ''}`}
+                  className={`chip ${active ? 'chip-active' : ''}`}
+                  aria-pressed={active}
+                  title={r}
                 >
                   {r}
                 </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Errors */}
-      {err && <div className="text-sm text-rose-600">{err}</div>}
-
-      {/* KPI STRIP (cleaner: one card, 2 rows of metrics) */}
-      <div className="card">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <div className="text-xs text-slate-600">Total Income</div>
-            <div className="text-2xl font-bold text-slate-900">{money(total)}</div>
-          </div>
-          <div>
-            <div className="text-xs text-slate-600">Total Hours</div>
-            <div className="text-2xl font-bold text-slate-900">{compact(hours, 2)}</div>
-          </div>
-          <div>
-            <div className="text-xs text-slate-600">Total Downs</div>
-            <div className="text-2xl font-bold text-slate-900">{compact(downs, 1)}</div>
+              );
+            })}
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <div>
-            <div className="text-xs text-slate-600">Avg $/h</div>
-            <div className="text-2xl font-bold text-slate-900">{num(hourly, 2)}</div>
+        {/* Actions & summary (buttons bottom-left) */}
+        <div className="mt-4 flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="btn btn-primary"
+              onClick={applyFilters}
+              disabled={loading || listLoading}
+            >
+              {loading || listLoading ? 'Applying…' : 'Apply Filters'}
+            </button>
+            <button className="btn btn-outline" onClick={reset} disabled={loading || listLoading}>
+              Reset
+            </button>
           </div>
-          <div>
-            <div className="text-xs text-slate-600">Avg $/down</div>
-            <div className="text-2xl font-bold text-slate-900">{num(perDown, 2)}</div>
-          </div>
-          <div>
-            <div className="text-xs text-slate-600">Total Shifts</div>
-            <div className="text-2xl font-bold text-slate-900">{compact(shiftCount, 1)}</div>
-          </div>
+          <div className="text-[11px] text-slate-500">Filtered by: {filterLabel}</div>
         </div>
+
+        {/* Results bubble (Specific) — shows selected label, mobile-friendly rows */}
+        {applied && (
+          <div className="mt-4 rounded-2xl border border-emerald-300/70 bg-emerald-50 p-4 text-base shadow-sm">
+            {err ? (
+              <span className="text-rose-600">{err}</span>
+            ) : (
+              <div className="flex flex-col gap-y-1 sm:flex-row sm:flex-wrap sm:items-center">
+                {/* xs mobile: two lines, no shifts */}
+                <div className="flex items-center gap-x-4 sm:hidden">
+                  <span className="text-slate-600">{filterLabel}</span>
+                  <span className="text-slate-400">•</span>
+                  <span className="font-semibold text-slate-900">{money(total)}</span>
+                </div>
+                <div className="flex items-center gap-x-4 sm:hidden">
+                  <span className="font-medium text-slate-800">${num(hourly)} / h</span>
+                  <span className="text-slate-400">•</span>
+                  <span className="font-medium text-slate-800">${num(perDown)} / down</span>
+                </div>
+
+                {/* sm+ desktop: one line with shifts */}
+                <div className="hidden flex-wrap items-center gap-x-4 sm:flex">
+                  <span className="text-slate-600">{filterLabel}</span>
+                  <span className="font-semibold text-slate-900">{money(total)}</span>
+                  <span className="text-slate-400">•</span>
+                  <span className="font-medium text-slate-800">${num(hourly)} / h</span>
+                  <span className="text-slate-400">•</span>
+                  <span className="font-medium text-slate-800">${num(perDown)} / down</span>
+                  <span className="text-slate-400">•</span>
+                  <span className="text-slate-600">{compact(shiftCount)} shifts</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* FILTERED SHIFTS LIST (paginated) */}
       <div className="card">
         <div className="mb-2 flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Shifts (filtered)</h2>
+            <h2 className="text-lg font-semibold text-slate-900">{listTitle}</h2>
             <p className="mt-0.5 text-xs text-slate-600">
               Most recent first • {compact(shiftCount || 0)} total
             </p>
@@ -384,9 +642,6 @@ export default function StatsPage() {
             <button className="btn" onClick={() => loadList(true)} disabled={listLoading}>
               {listLoading ? 'Refreshing…' : 'Refresh'}
             </button>
-            <Link href="/" className="btn btn-outline">
-              Home
-            </Link>
           </div>
         </div>
 

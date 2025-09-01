@@ -1,6 +1,5 @@
 // app/shifts/[id]/page.tsx
 import { getServerSession } from 'next-auth';
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import EditShiftForm from '@/components/EditShiftForm';
@@ -48,13 +47,6 @@ export default async function EditShiftPage({ params }: { params: Promise<{ id: 
 
   return (
     <main className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-900">Edit Shift</h1>
-        <Link href="/" className="btn btn-outline">
-          Home
-        </Link>
-      </div>
-
       <EditShiftForm shift={shift} />
     </main>
   );

@@ -10,7 +10,7 @@ function ymdToUTCDate(ymd: unknown): Date {
     throw new Error('Invalid date format (expected YYYY-MM-DD)');
   }
   const [y, m, d] = ymd.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
+  return new Date(Date.UTC(y, (m as number) - 1, d as number));
 }
 
 /** Round to nearest 0.25 */
@@ -44,29 +44,45 @@ export async function GET(req: Request) {
         .map((s) => Number(s))
         .filter(Number.isInteger)
     : [];
+
   const casinos = searchParams
     .getAll('casino')
     .map((s) => s.trim())
     .filter(Boolean);
 
+  // explicit range (takes precedence over year/month)
+  const from = searchParams.get('from'); // ISO
+  const to = searchParams.get('to'); // ISO
+
   const where: any = { userId: session.user.id };
   if (casinos.length) where.casino = { in: casinos };
 
-  if (year) {
+  if (from || to) {
+    where.date = {
+      ...(from ? { gte: new Date(from) } : {}),
+      ...(to ? { lt: new Date(to) } : {}),
+    };
+  } else if (year) {
     const y = Number(year);
     if (!Number.isNaN(y)) {
       if (month) {
         const m = Number(month) - 1;
         if (m >= 0 && m <= 11) {
-          where.date = { gte: new Date(Date.UTC(y, m, 1)), lt: new Date(Date.UTC(y, m + 1, 1)) };
+          where.date = {
+            gte: new Date(Date.UTC(y, m, 1)),
+            lt: new Date(Date.UTC(y, m + 1, 1)),
+          };
         }
       } else {
-        where.date = { gte: new Date(Date.UTC(y, 0, 1)), lt: new Date(Date.UTC(y + 1, 0, 1)) };
+        where.date = {
+          gte: new Date(Date.UTC(y, 0, 1)),
+          lt: new Date(Date.UTC(y + 1, 0, 1)),
+        };
       }
     }
   }
 
-  // Select ONLY fields we care about (no clockIn/clockOut anywhere)
+  // Pull superset; we’ll apply some filters in-memory (DOW & "month across years")
   const superset = await prisma.shift.findMany({
     where,
     orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
@@ -87,7 +103,7 @@ export async function GET(req: Request) {
   // In-memory DOW and "month across all years" filters
   const filtered = superset.filter((s) => {
     const d = new Date(s.date); // stored at UTC midnight
-    if (!year && month) {
+    if (!from && !to && !year && month) {
       const m = Number(month);
       if (!Number.isNaN(m) && d.getUTCMonth() + 1 !== m) return false;
     }
@@ -117,7 +133,9 @@ export async function POST(req: Request) {
   }
 
   const { date, casino, hours, tokesCash, downs, notes } = body ?? {};
+
   if (!date) return NextResponse.json({ error: 'date is required' }, { status: 400 });
+
   if (typeof casino !== 'string' || !casino.trim()) {
     return NextResponse.json({ error: 'casino is required' }, { status: 400 });
   }
@@ -133,7 +151,7 @@ export async function POST(req: Request) {
   // Normalize numbers (server rounds to 0.25)
   const hoursNum = roundQuarter(Number(hours));
   const downsNum = roundQuarter(Number(downs ?? 0));
-  const tokesCents = toNonNegInt(tokesCash);
+  const tokesDollars = toNonNegInt(tokesCash);
 
   if (!Number.isFinite(hoursNum) || hoursNum <= 0) {
     return NextResponse.json({ error: 'hours must be a positive number' }, { status: 400 });
@@ -142,7 +160,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'downs must be ≥ 0' }, { status: 400 });
   }
 
-  // Create WITHOUT any clockIn/clockOut
+  // Create WITHOUT any clockIn/clockOut (hours-only model)
   const row = await prisma.shift.create({
     data: {
       userId: session.user.id,
@@ -150,7 +168,7 @@ export async function POST(req: Request) {
       casino: casino.trim(),
       hours: hoursNum,
       downs: downsNum,
-      tokesCash: tokesCents,
+      tokesCash: tokesDollars,
       notes: typeof notes === 'string' && notes.trim() ? notes : null,
     },
     select: {

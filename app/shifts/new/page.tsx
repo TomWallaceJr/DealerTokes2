@@ -21,7 +21,6 @@ export default async function NewShiftPage({ searchParams }: { searchParams: Pro
 
   return (
     <main className="space-y-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Log a Shift</h1>
       <ShiftForm initialDate={initialDate} />
     </main>
   );

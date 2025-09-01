@@ -1,5 +1,7 @@
 // components/ShiftForm.tsx
 'use client';
+
+import BackButton from '@/components/BackButton';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -49,7 +51,7 @@ export default function ShiftForm({
 
   const [casino, setCasino] = useState<string>('');
 
-  // display strings (for no spinners + clearing '0' on focus)
+  // display strings (prevent spinners; clear "0" on focus)
   const [hoursStr, setHoursStr] = useState<string>('0');
   const [downsStr, setDownsStr] = useState<string>('0');
   const [cashoutStr, setCashoutStr] = useState<string>('0'); // whole dollars
@@ -78,10 +80,15 @@ export default function ShiftForm({
     })();
   }, []);
 
-  // Default casino to most recent shift's room (only if empty)
+  // Prefer last used room from localStorage, then fall back to most recent shift
   useEffect(() => {
+    if (casino.trim()) return;
+    const local = typeof window !== 'undefined' ? localStorage.getItem('lastRoom') : null;
+    if (local) {
+      setCasino(local);
+      return;
+    }
     (async () => {
-      if (casino.trim()) return;
       try {
         const res = await fetch('/api/shifts?limit=1', { cache: 'no-store' });
         if (!res.ok) return;
@@ -106,18 +113,19 @@ export default function ShiftForm({
     }
     setSaving(true);
     try {
-      const payload = {
+      const normalized = {
         date,
         casino: casino.trim(),
-        hours: ceilQuarter(hours), // send rounded-up
-        tokesCash, // whole dollars (rounded-up)
+        hours: ceilQuarter(hours), // round up to 0.25
+        tokesCash, // whole dollars (rounded up)
         downs: ceilQuarter(Math.max(0, downs)),
         notes: notes || undefined,
       };
+
       const res = await fetch('/api/shifts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(normalized),
       });
       if (!res.ok) {
         let msg = 'Save failed';
@@ -127,6 +135,12 @@ export default function ShiftForm({
         } catch {}
         throw new Error(msg);
       }
+
+      // remember last room locally
+      try {
+        localStorage.setItem('lastRoom', normalized.casino);
+      } catch {}
+
       onSaved?.();
       router.push('/');
       router.refresh();
@@ -141,6 +155,16 @@ export default function ShiftForm({
 
   return (
     <div className="card space-y-4">
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-slate-900">Log a Shift</h2>
+          <p className="mt-0.5 text-xs text-slate-600">Quick add your hours, downs, and cashout.</p>
+        </div>
+        {/* Top-right back button (icon-only on mobile) */}
+        <BackButton className="hidden sm:inline-flex" />
+      </div>
+
       {/* Date + Casino in one row on sm+ */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
@@ -255,7 +279,7 @@ export default function ShiftForm({
         />
       </div>
 
-      {/* Footer */}
+      {/* Footer (KPIs + actions) */}
       <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="text-slate-600">
           Total: ${tokesCash} • $/h: {perHour.toFixed(2)} • $/down: {perDown.toFixed(2)}
@@ -278,6 +302,7 @@ export default function ShiftForm({
               Cancel
             </button>
           </div>
+          {/* Inline error under buttons */}
           {error && <div className="text-xs text-rose-600">{error}</div>}
         </div>
       </div>

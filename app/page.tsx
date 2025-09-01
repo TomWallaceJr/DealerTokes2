@@ -5,6 +5,7 @@ import HomeQuickActions from '@/components/HomeQuickActions';
 import { authOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import Link from 'next/link';
+import HomeHeader from './(home)/HomeHeader';
 
 function displayName(name?: string | null, email?: string | null) {
   const n = (name ?? '').trim();
@@ -126,9 +127,9 @@ export default async function HomePage() {
   // Authenticated view
   return (
     <main className="space-y-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Hello {userName}!</h1>
-      <HomeQuickActions />
+      <HomeHeader userName={userName} />
       <CalendarPicker />
+      <HomeQuickActions />
     </main>
   );
 }

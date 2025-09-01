@@ -1,16 +1,23 @@
 /* app/globals.css */
 @import 'tailwindcss';
 
-/* ===== Base (light, fresh gradient) ===== */
+/* ================= Base (slightly darker gradient) ================= */
 @layer base {
+  :root {
+    /* Used to keep content above the fixed footer */
+    --footer-h: 64px;
+  }
+
   html,
   body {
     height: 100%;
   }
 
   body {
-    /* soft glassy background */
-    @apply bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 text-slate-800 antialiased;
+    /* Darken the background one step (50 → 100) */
+    @apply bg-gradient-to-br from-emerald-100 via-teal-100 to-cyan-100 text-slate-800 antialiased;
+    /* Keep room for fixed footer (with safe-area) */
+    padding-bottom: calc(var(--footer-h) + max(env(safe-area-inset-bottom), 12px));
   }
 
   ::selection {
@@ -18,44 +25,72 @@
   }
 }
 
-/* ===== Components (glassy cards, rounded-2xl controls) ===== */
+/* ================= Components ================= */
 @layer components {
-  /* Card: frosted glass */
+  /* ---- Card: frosted glass ---- */
   .card {
     @apply rounded-2xl border border-emerald-200/60 bg-white/70 p-5 shadow-[0_8px_30px_rgba(0,0,0,0.06)] backdrop-blur supports-[backdrop-filter]:bg-white/60;
   }
 
-  /* Buttons */
+  /* ---- Header (glassy, sticky) ---- */
+  .app-header {
+    @apply sticky top-0 z-40 w-full border-b border-emerald-200/60 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60;
+    padding-top: max(env(safe-area-inset-top), 8px);
+  }
+  .app-header-inner {
+    @apply mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3;
+  }
+  .app-header-title {
+    @apply text-lg font-semibold text-slate-900;
+  }
+  .app-header-actions {
+    @apply flex items-center gap-2;
+  }
+
+  /* ---- Footer (glassy, fixed) ---- */
+  .app-footer {
+    @apply fixed inset-x-0 bottom-0 z-40 border-t border-emerald-200/60 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70;
+    /* Tell layout how tall the footer is */
+    --footer-h: 64px;
+    padding-bottom: max(env(safe-area-inset-bottom), 8px);
+  }
+  .app-footer-inner {
+    @apply mx-auto grid max-w-5xl grid-cols-3 items-center gap-2 px-4;
+    min-height: var(--footer-h);
+  }
+  .footer-icon-btn {
+    @apply inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/80 text-slate-700 shadow-sm ring-1 ring-slate-300/60 hover:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none active:bg-white/90;
+  }
+  .footer-icon-btn[aria-disabled='true'] {
+    @apply opacity-50;
+  }
+
+  /* ---- Buttons ---- */
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-white/80 px-3.5 py-2 text-sm font-medium text-slate-800 shadow-sm ring-1 ring-slate-300/60 hover:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none active:bg-white/90;
   }
-
   .btn-primary {
     @apply bg-emerald-600 text-white shadow ring-0 hover:bg-emerald-700 active:bg-emerald-800;
   }
-
   .btn-danger {
     @apply bg-rose-600 text-white shadow ring-0 hover:bg-rose-700 active:bg-rose-800;
   }
-
   .btn-outline {
     @apply bg-transparent text-slate-800 ring-1 ring-slate-300 hover:bg-white;
   }
-
   .btn-ghost {
     @apply bg-transparent text-emerald-700 ring-1 ring-emerald-300/60 hover:bg-emerald-50;
   }
 
-  /* Inputs (pill-ish, glass) */
+  /* ---- Inputs (pill-ish, glass) ---- */
   .input {
     @apply w-full rounded-xl border border-slate-300/60 bg-white/80 px-3.5 py-2 backdrop-blur placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 focus:outline-none;
   }
-
   .textarea {
     @apply w-full rounded-xl border border-slate-300/60 bg-white/80 px-3.5 py-2 backdrop-blur focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 focus:outline-none;
   }
 
-  /* Filter chips */
+  /* ---- Filter chips ---- */
   .chip {
     @apply rounded-full border border-emerald-300/70 bg-white/70 px-3 py-1 text-sm text-emerald-800 hover:bg-emerald-50;
   }
@@ -63,13 +98,30 @@
     @apply border-emerald-500 bg-emerald-100 text-emerald-900;
   }
 
-  /* Links */
+  /* ---- Links ---- */
   .link {
     @apply text-emerald-700 underline underline-offset-2 hover:text-emerald-800;
   }
 
-  /* Small stat pill (optional helper for metrics) */
+  /* ---- Small stat pill ---- */
   .stat {
     @apply inline-flex items-center rounded-full bg-emerald-600/10 px-2.5 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-500/30;
   }
+}
+
+/* ================= Utilities / tweaks ================= */
+
+/* Hide spinners on number inputs (consistent with app’s clean fields) */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* Optional helper if a page lacks footer: remove reserved space */
+.no-footer-space {
+  padding-bottom: 0 !important;
 }
