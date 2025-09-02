@@ -4,8 +4,10 @@
 // ============================================================================
 import { authOptions as _authOptions } from '@/lib/auth';
 import { prisma as _prisma } from '@/lib/prisma';
+import { ShiftUpdateSchema, toPrismaUpdateData } from '@/lib/validation/shift';
 import { getServerSession as _getServerSession } from 'next-auth';
 import { NextRequest as _NextRequest, NextResponse as _NextResponse } from 'next/server';
+import { z as _z } from 'zod';
 
 const MAX_FETCH = 5000; // safety guard
 function _clamp(n: number, min: number, max: number) {
@@ -101,4 +103,34 @@ export async function GET(req: _NextRequest) {
 
   const hasMore = offset + items.length < total;
   return _NextResponse.json({ items, total, hasMore, limit, offset });
+}
+
+export async function POST(req: _NextRequest) {
+  try {
+    const session = await _getServerSession(_authOptions);
+    if (!session?.user?.id) {
+      return _NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const input = ShiftUpdateSchema.parse(body);
+    const data = toPrismaUpdateData(input);
+
+    const created = await _prisma.shift.create({
+      data: { ...data, userId: session.user.id },
+    });
+    return _NextResponse.json(created, { status: 201 });
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      return _NextResponse.json(
+        { error: 'A shift for this date already exists for this user.' },
+        { status: 409 },
+      );
+    }
+    if (err instanceof _z.ZodError) {
+      const msg = err.issues.map((e) => `${e.path.join('.') || 'field'}: ${e.message}`).join('; ');
+      return _NextResponse.json({ error: msg }, { status: 400 });
+    }
+    return _NextResponse.json({ error: 'Failed to create shift' }, { status: 500 });
+  }
 }

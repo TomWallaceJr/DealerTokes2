@@ -90,6 +90,18 @@ export default function ShiftForm({ initialDate }: { initialDate?: string }) {
     })();
   }, []);
 
+  // prefill last used room (if any)
+  useEffect(() => {
+    try {
+      const last = localStorage.getItem('lastRoom');
+      if (last && !casino) setCasino(last);
+    } catch {
+      /* ignore */
+    }
+    // run once on mount only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function create() {
     setError(null);
     if (!casino.trim() || hours <= 0) {
@@ -129,13 +141,23 @@ export default function ShiftForm({ initialDate }: { initialDate?: string }) {
         localStorage.setItem('lastRoom', body.casino);
       } catch {}
 
-      router.push('/shifts');
+      router.push('/');
       router.refresh();
     } catch (e: any) {
       setError(e?.message || 'Failed to create shift.');
     } finally {
       setSaving(false);
     }
+  }
+
+  function clearForm() {
+    setDate(initialDate ?? todayYmd());
+    setCasino('');
+    setHoursStr('0');
+    setDownsStr('0');
+    setCashoutStr('0');
+    setNotes('');
+    setError(null);
   }
 
   // stat bubble
@@ -150,21 +172,48 @@ export default function ShiftForm({ initialDate }: { initialDate?: string }) {
 
   return (
     <div className="card relative space-y-4">
+      {/* Header row (top-left) */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-slate-900">Log Shift</h2>
+        </div>
+        <span className="hidden sm:block" />
+      </div>
+
       {/* Results bubble */}
       <div className="m-5 mb-0 rounded-2xl border border-emerald-300/70 bg-gradient-to-br from-emerald-50 to-teal-50 p-4 shadow-sm">
         {error ? (
           <span className="text-rose-600">{error}</span>
         ) : (
-          <div className="hidden flex-wrap items-center gap-x-4 sm:flex">
-            <span className="text-slate-600">{resultsLabel}</span>
-            <span className="font-semibold text-slate-900">{money(tokesCash)}</span>
-            <span className="text-slate-400">•</span>
-            <span className="font-medium text-slate-800">${num(perHour)} / h</span>
-            <span className="text-slate-400">•</span>
-            <span className="font-medium text-slate-800">${num(perDown)} / down</span>
-          </div>
+          <>
+            {/* Mobile */}
+            <div className="flex flex-col gap-1 sm:hidden">
+              <div className="flex items-center gap-3">
+                <span className="text-[13px] text-slate-600">{resultsLabel}</span>
+              </div>
+              <div className="flex items-center gap-3 text-[13px]">
+                <span className="text-[14px] font-semibold text-slate-900">{money(tokesCash)}</span>
+                <span className="text-slate-400">•</span>
+                <span className="font-medium text-slate-800">${num(perHour)} / h</span>
+                <span className="text-slate-400">•</span>
+                <span className="font-medium text-slate-800">${num(perDown)} / d</span>
+              </div>
+            </div>
+
+            {/* Desktop */}
+            <div className="hidden flex-wrap items-center gap-x-4 sm:flex">
+              <span className="text-slate-600">{resultsLabel}</span>
+              <span className="font-semibold text-slate-900">{money(tokesCash)}</span>
+              <span className="text-slate-400">•</span>
+              <span className="font-medium text-slate-800">${num(perHour)} / h</span>
+              <span className="text-slate-400">•</span>
+              <span className="font-medium text-slate-800">${num(perDown)} / down</span>
+            </div>
+          </>
         )}
       </div>
+
+      
 
       {/* Date + Casino */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -267,14 +316,24 @@ export default function ShiftForm({ initialDate }: { initialDate?: string }) {
         />
       </div>
 
-      {/* Footer */}
+      {/* Actions: Enter (left) | Clear + Cancel (right) */}
       <div className="flex items-center justify-between gap-2">
-        <div className="text-sm text-slate-600">
-          Total: {money(tokesCash)} • $/h: {num(perHour)} • $/down: {num(perDown)}
-        </div>
         <button className="btn btn-primary" onClick={create} disabled={saving}>
-          {saving ? 'Creating…' : 'Create Shift'}
+          {saving ? 'Creating…' : 'Enter'}
         </button>
+        <div className="flex items-center gap-2">
+          <button className="btn" type="button" onClick={clearForm} aria-label="Clear form">
+            Clear
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => router.push('/')}
+            aria-label="Cancel and go home"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   );

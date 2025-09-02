@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import Link from 'next/link';
 import HomeHeader from './(home)/HomeHeader';
+import TopNavBar from '@/components/TopNavBar';
 
 function displayName(name?: string | null, email?: string | null) {
   const n = (name ?? '').trim();
@@ -109,8 +110,15 @@ export default async function HomePage() {
   // Authenticated dashboard
   return (
     <main className="space-y-6">
-      {/* Always at the very top */}
-      <HomeHeader userName={userName} />
+      {/* Mobile top bar (sticky) */}
+      <TopNavBar />
+      {/* spacer for sticky height on xs */}
+      <div className="h-12 sm:hidden" />
+
+      {/* Desktop/tablet header */}
+      <div className="hidden sm:block">
+        <HomeHeader userName={userName} />
+      </div>
 
       {/* On desktop: Quick Actions (horizontal) ABOVE Calendar
           On mobile: Calendar FIRST, then Quick Actions stacked vertically */}
