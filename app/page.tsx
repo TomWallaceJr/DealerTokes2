@@ -2,11 +2,10 @@
 import CalendarPicker from '@/components/CalendarPicker';
 import DemoSignInButton from '@/components/DemoSignInButton';
 import HomeQuickActions from '@/components/HomeQuickActions';
-import TopNavBar from '@/components/TopNavBar';
 import { authOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import Link from 'next/link';
-import HomeHeader from './(home)/HomeHeader';
+import Snapshot from '@/components/Snapshot';
 
 function displayName(name?: string | null, email?: string | null) {
   const n = (name ?? '').trim();
@@ -110,15 +109,10 @@ export default async function HomePage() {
   // Authenticated dashboard
   return (
     <main className="space-y-6">
-      {/* Mobile top bar (sticky) */}
-      <TopNavBar />
-      {/* spacer for fixed height on xs */}
-      <div className="h-14 sm:hidden" />
+      {/* TopNavBar now rendered globally in layout */}
 
-      {/* Desktop/tablet header */}
-      <div className="hidden sm:block">
-        <HomeHeader userName={userName} />
-      </div>
+      {/* Snapshot visible on all screens; responsive inside */}
+      <Snapshot userName={userName} />
 
       {/* On desktop: Quick Actions (horizontal) ABOVE Calendar
           On mobile: Calendar FIRST, then Quick Actions stacked vertically */}

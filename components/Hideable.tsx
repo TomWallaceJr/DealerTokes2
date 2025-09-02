@@ -9,6 +9,7 @@ type Props = {
   className?: string; // wrapper classes
   hiddenLabel?: string; // text to show next to "+" when hidden (e.g., "Snapshot hidden")
   defaultHidden?: boolean; // optional initial default
+  overlayToggle?: boolean; // if true, position toggle button at top-left overlay
 };
 
 export default function Hideable({
@@ -17,6 +18,7 @@ export default function Hideable({
   className,
   hiddenLabel,
   defaultHidden = false,
+  overlayToggle = false,
 }: Props) {
   const storageKey = `hide:${id}`;
   const [hidden, setHidden] = useState(defaultHidden);
@@ -48,9 +50,15 @@ export default function Hideable({
   };
 
   return (
-    <div className={className}>
+    <div className={overlayToggle ? `relative ${className ?? ''}` : className}>
       {/* Toggle bar (always visible) */}
-      <div className="mb-2 flex items-center gap-2">
+      <div
+        className={
+          overlayToggle
+            ? 'absolute left-2 top-2 z-10 flex items-center gap-2'
+            : 'mb-2 flex items-center gap-2'
+        }
+      >
         {hidden ? (
           <>
             <button
