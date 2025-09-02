@@ -1,151 +1,91 @@
-// app/api/shifts/summary/route.ts
+// ============================================================================
+// Query params supported (all optional):
+// - from, to (YYYY-MM-DD) [to is exclusive]
+// - year (YYYY), month (1..12)
+// - casino (repeatable)
+// - dow (comma-separated 0..6, Sunday=0)
+// ============================================================================
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
-function parseIntSafe(s: string | null): number | null {
-  if (!s) return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? Math.trunc(n) : null;
+function ymdToUtcDate(ymd: string) {
+  const [y, m, d] = ymd.split('-').map((x) => parseInt(x, 10));
+  if (!y || !m || !d) throw new Error('Bad ymd');
+  return new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
 }
-
-/** "YYYY-MM-DD" → Date at UTC midnight */
-function ymdToUTCDate(s: string): Date {
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) throw new Error('Invalid YYYY-MM-DD');
-  const y = Number(m[1]);
-  const mm = Number(m[2]) - 1;
-  const d = Number(m[3]);
-  return new Date(Date.UTC(y, mm, d));
-}
-
-/** Coerce arbitrary date-ish string to UTC midnight (best effort) */
-function coerceToUTCDateMidnight(s: string): Date {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return ymdToUTCDate(s);
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) throw new Error('Invalid date');
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
-
-// Build [gte, lt) range from year/month or from/to (all UTC)
-function buildRangeUTC(params: URLSearchParams) {
-  const year = parseIntSafe(params.get('year'));
-  const month = parseIntSafe(params.get('month')); // 1..12
-  const fromStr = params.get('from');
-  const toStr = params.get('to');
-
-  // from/to wins if provided
-  if (fromStr || toStr) {
-    const gte = fromStr ? coerceToUTCDateMidnight(fromStr) : undefined;
-    const lt = toStr
-      ? // make 'to' exclusive by bumping one day
-        new Date(
-          Date.UTC(
-            coerceToUTCDateMidnight(toStr).getUTCFullYear(),
-            coerceToUTCDateMidnight(toStr).getUTCMonth(),
-            coerceToUTCDateMidnight(toStr).getUTCDate() + 1,
-          ),
-        )
-      : undefined;
-    return { gte, lt };
-  }
-
-  if (year && month) {
-    const gte = new Date(Date.UTC(year, month - 1, 1));
-    const lt = new Date(Date.UTC(year, month, 1));
-    return { gte, lt };
-  }
-  if (year) {
-    const gte = new Date(Date.UTC(year, 0, 1));
-    const lt = new Date(Date.UTC(year + 1, 0, 1));
-    return { gte, lt };
-  }
-  return {};
-}
-
-function parseMulti(params: URLSearchParams, key: string): string[] {
-  // supports ?key=a&key=b and ?key=a,b
-  const all = params.getAll(key);
-  const split = all.flatMap((v) => v.split(','));
-  return Array.from(new Set(split.map((s) => s.trim()).filter(Boolean)));
+function rangeForYearMonth(year?: number, month?: number): { from?: Date; to?: Date } {
+  if (!year) return {};
+  if (!month)
+    return { from: new Date(Date.UTC(year, 0, 1)), to: new Date(Date.UTC(year + 1, 0, 1)) };
+  const from = new Date(Date.UTC(year, month - 1, 1));
+  const to = new Date(Date.UTC(month === 12 ? year + 1 : year, month === 12 ? 0 : month, 1));
+  return { from, to };
 }
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const { searchParams } = new URL(req.url);
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id)
+      return NextResponse.json({ total: 0, hours: 0, downs: 0, hourly: 0, perDown: 0, count: 0 });
 
-  const params = new URL(req.url).searchParams;
+    const fromParam = searchParams.get('from') ?? undefined;
+    const toParam = searchParams.get('to') ?? undefined;
+    const year = Number(searchParams.get('year') ?? '') || undefined;
+    const month = Number(searchParams.get('month') ?? '') || undefined;
+    const casinos = searchParams.getAll('casino').filter(Boolean);
+    const dowParam = searchParams.get('dow') ?? '';
+    const dows = dowParam
+      ? dowParam
+          .split(',')
+          .map((x) => Number(x))
+          .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
+      : [];
 
-  // Filters
-  const range = buildRangeUTC(params); // year/month or from/to (UTC-safe)
-  const casinos = parseMulti(params, 'casino'); // one or many room names
-  const dowsRaw = parseMulti(params, 'dow'); // "0..6" or "mon,tue,..."
-  const mapDowName: Record<string, number> = {
-    sun: 0,
-    mon: 1,
-    tue: 2,
-    wed: 3,
-    thu: 4,
-    fri: 5,
-    sat: 6,
-  };
-  const dows = dowsRaw
-    .map((v) => v.toLowerCase())
-    .map((v) => (v in mapDowName ? mapDowName[v] : Number(v)))
-    .filter((n) => Number.isFinite(n) && n >= 0 && n <= 6) as number[];
+    let from: Date | undefined;
+    let to: Date | undefined;
+    if (fromParam || toParam) {
+      if (fromParam) from = ymdToUtcDate(fromParam);
+      if (toParam) to = ymdToUtcDate(toParam);
+    } else if (year) {
+      const r = rangeForYearMonth(year, month);
+      from = r.from;
+      to = r.to;
+    }
 
-  // DB where (date range + casino list here; DOW handled in JS with UTC day)
-  const where: any = { userId: session.user.id };
-  if (range.gte || range.lt)
-    where.date = { ...(range.gte && { gte: range.gte }), ...(range.lt && { lt: range.lt }) };
-  if (casinos.length) where.casino = { in: casinos };
+    const where: any = { userId: session.user.id };
+    if (from || to) {
+      where.date = {};
+      if (from) where.date.gte = from;
+      if (to) where.date.lt = to;
+    }
+    if (casinos.length) where.casino = { in: casinos };
 
-  // Pull minimal fields and aggregate in JS
-  const shifts = await prisma.shift.findMany({
-    where,
-    select: { date: true, tokesCash: true, hours: true, downs: true, casino: true },
-  });
+    const rows = await prisma.shift.findMany({
+      where,
+      select: { date: true, hours: true, downs: true, tokesCash: true },
+    });
+    const filtered = dows.length
+      ? rows.filter((r) => dows.includes((r.date as Date).getUTCDay()))
+      : rows;
 
-  // Day-of-week filter using **UTC** day
-  const filtered = dows.length
-    ? shifts.filter((s) => dows.includes(new Date(s.date).getUTCDay()))
-    : shifts;
+    let total = 0,
+      hours = 0,
+      downs = 0,
+      count = 0;
+    for (const r of filtered) {
+      total += r.tokesCash ?? 0;
+      hours += r.hours ?? 0;
+      downs += r.downs ?? 0;
+      count += 1;
+    }
+    const hourly = hours > 0 ? total / hours : 0;
+    const perDown = downs > 0 ? total / downs : 0;
 
-  // Totals (ensure numeric for Prisma Decimal types)
-  const total = filtered.reduce((a, s) => a + (s.tokesCash ?? 0), 0);
-  const hours = filtered.reduce((a, s) => a + Number(s.hours ?? 0), 0);
-  const downs = filtered.reduce((a, s) => a + Number(s.downs ?? 0), 0);
-  const hourly = hours > 0 ? total / hours : 0;
-  const perDown = downs > 0 ? total / downs : 0;
-
-  // Optional breakdowns for future charts
-  const byCasino: Record<string, { total: number; hours: number; downs: number; count: number }> =
-    {};
-  for (const s of filtered) {
-    const k = s.casino;
-    byCasino[k] ??= { total: 0, hours: 0, downs: 0, count: 0 };
-    byCasino[k].total += s.tokesCash ?? 0;
-    byCasino[k].hours += Number(s.hours ?? 0);
-    byCasino[k].downs += Number(s.downs ?? 0);
-    byCasino[k].count += 1;
+    return NextResponse.json({ total, hours, downs, hourly, perDown, count });
+  } catch {
+    return NextResponse.json({ total: 0, hours: 0, downs: 0, hourly: 0, perDown: 0, count: 0 });
   }
-
-  return NextResponse.json({
-    total,
-    hours,
-    downs,
-    hourly,
-    perDown,
-    count: filtered.length,
-    filters: {
-      year: params.get('year'),
-      month: params.get('month'),
-      casinos,
-      dows,
-      from: params.get('from'),
-      to: params.get('to'),
-    },
-    breakdowns: { byCasino },
-  });
 }

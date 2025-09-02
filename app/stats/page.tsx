@@ -1,12 +1,16 @@
-// app/stats/page.tsx
+// ============================================================================
+// File: /app/stats/page.tsx
+// Purpose: Use shared bubble + ensure list matches filters via API
+// ============================================================================
 'use client';
 
 import BackButton from '@/components/BackButton';
+import StatsResultsBubble from '@/components/StatsResultsBubble';
 import { dateUTC } from '@/lib/date';
-import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
+// ---- types
 type Summary = {
   total: number;
   hours: number;
@@ -15,27 +19,21 @@ type Summary = {
   perDown: number;
   count: number;
 };
-
 type Shift = {
   id: string;
-  date: string; // ISO date
+  date: string;
   casino: string;
   hours: number;
   tokesCash: number;
   downs: number;
   notes?: string | null;
 };
-
-type PageResp = {
-  items: Shift[];
-  total: number;
-  hasMore: boolean;
-  limit: number;
-  offset: number;
-};
+type PageResp = { items: Shift[]; total: number; hasMore: boolean; limit: number; offset: number };
+type QuickKey = 'all' | 'ytd' | 'curMonth' | 'lastMonth' | 'curWeek' | 'lastWeek';
 
 const PAGE_SIZE = 8;
 
+// ---- constants
 const MONTHS = [
   { v: '', l: 'All months' },
   { v: '1', l: 'January' },
@@ -51,7 +49,6 @@ const MONTHS = [
   { v: '11', l: 'November' },
   { v: '12', l: 'December' },
 ];
-
 const DOW = [
   { v: 1, l: 'Mon' },
   { v: 2, l: 'Tue' },
@@ -61,40 +58,27 @@ const DOW = [
   { v: 6, l: 'Sat' },
   { v: 0, l: 'Sun' },
 ];
-
-const dowOrder = [1, 2, 3, 4, 5, 6, 0];
+const dowOrder = [1, 2, 3, 4, 5, 6, 0] as const;
 const dowMap: Record<number, string> = Object.fromEntries(DOW.map((d) => [d.v, d.l]));
 
-/** $1,234 (no decimals by default) */
+// ---- formatters
 const money = (n: number, digits = 0) =>
   new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: digits,
   }).format(n);
-
-/** 1.2K */
 const compact = (n: number, digits = 1) =>
-  new Intl.NumberFormat(undefined, {
-    notation: 'compact',
-    maximumFractionDigits: digits,
-  }).format(n);
-
-/** 2 decimals */
+  new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: digits }).format(
+    n,
+  );
 const num = (n: number, digits = 2) =>
   new Intl.NumberFormat(undefined, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(n);
 
-function displayName(name?: string | null, email?: string | null) {
-  const n = (name ?? '').trim();
-  if (n) return n.split(/\s+/)[0];
-  if (email) return email.split('@')[0];
-  return 'there';
-}
-
-/** Monday-start week helpers (local) */
+// ---- date helpers (local Monday weeks)
 function pad(n: number) {
   return String(n).padStart(2, '0');
 }
@@ -103,8 +87,8 @@ function ymdLocal(d: Date) {
 }
 function mondayOf(date: Date) {
   const d = new Date(date);
-  const day = d.getDay(); // 0..6 (Sun..Sat)
-  const delta = (day + 6) % 7; // Monday=0
+  const day = d.getDay();
+  const delta = (day + 6) % 7;
   d.setDate(d.getDate() - delta);
   d.setHours(0, 0, 0, 0);
   return d;
@@ -132,7 +116,6 @@ function monthLabel(mv: string) {
   return MONTHS.find((m) => m.v === mv)?.l ?? mv;
 }
 
-/** Build pretty label for specific filters */
 function prettySpecificLabel({
   weekDate,
   selectedDows,
@@ -161,23 +144,18 @@ function prettySpecificLabel({
   return bits.length ? bits.join(' • ') : 'All';
 }
 
-/** Quick filter keys */
-type QuickKey = 'all' | 'ytd' | 'curMonth' | 'lastMonth' | 'curWeek' | 'lastWeek';
-
 export default function StatsPage() {
   const now = new Date();
-  const { data: session } = useSession();
-  const who = displayName(session?.user?.name, session?.user?.email);
 
-  // ---------- Specific Filters (main) ----------
+  // Specific filters (main)
   const [year, setYear] = useState<string>('');
   const [month, setMonth] = useState<string>('');
   const [selectedDows, setSelectedDows] = useState<number[]>([]);
   const [rooms, setRooms] = useState<string[]>([]);
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
-  const [weekDate, setWeekDate] = useState<string>(''); // "YYYY-MM-DD" (Mon–Sun window)
+  const [weekDate, setWeekDate] = useState<string>('');
 
-  // Summary + list for main filters
+  // Summary + list state
   const [sum, setSum] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -187,16 +165,15 @@ export default function StatsPage() {
   const [hasMore, setHasMore] = useState(false);
   const [listLoading, setListLoading] = useState(false);
   const [listErr, setListErr] = useState<string | null>(null);
-  const [listBaseParams, setListBaseParams] = useState<string>(''); // used by pagination
-  const [applied, setApplied] = useState(false); // show big bubble only after user clicks Apply
+  const [listBaseParams, setListBaseParams] = useState<string>('');
+  const [applied, setApplied] = useState(false);
 
-  // ---------- Quick Filters ----------
+  // Quick filters
   const [quick, setQuick] = useState<QuickKey>('ytd');
   const [quickSum, setQuickSum] = useState<Summary | null>(null);
   const [quickErr, setQuickErr] = useState<string | null>(null);
   const [quickLoading, setQuickLoading] = useState(false);
 
-  // Year dropdown (last 10 years)
   const yearOpts = useMemo(() => {
     const y = now.getFullYear();
     const arr = [{ v: '', l: 'All years' }];
@@ -204,7 +181,6 @@ export default function StatsPage() {
     return arr;
   }, [now]);
 
-  // Build params for main filters
   function buildParams(base?: Record<string, string>) {
     const params = new URLSearchParams(base);
     if (weekDate) {
@@ -222,13 +198,12 @@ export default function StatsPage() {
     return params;
   }
 
-  // Build params for quick filters
   function buildQuickParams(k: QuickKey) {
     const params = new URLSearchParams();
     const y = now.getFullYear();
-    const m = now.getMonth() + 1; // 1..12
+    const m = now.getMonth() + 1;
     if (k === 'all') {
-      // none
+      /* none */
     } else if (k === 'ytd') {
       params.set('year', String(y));
     } else if (k === 'curMonth') {
@@ -253,7 +228,7 @@ export default function StatsPage() {
     return params;
   }
 
-  // Rooms for chips
+  // Rooms list
   useEffect(() => {
     (async () => {
       try {
@@ -261,9 +236,7 @@ export default function StatsPage() {
         if (!res.ok) return;
         const data = await res.json();
         if (Array.isArray(data.rooms)) setRooms(data.rooms);
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     })();
   }, []);
 
@@ -282,13 +255,12 @@ export default function StatsPage() {
     setApplied(false);
   }
 
-  async function loadSummary() {
+  async function loadSummary(paramsStr?: string) {
     setLoading(true);
     setErr(null);
     try {
-      const res = await fetch(`/api/shifts/summary?${buildParams().toString()}`, {
-        cache: 'no-store',
-      });
+      const qs = paramsStr ?? buildParams().toString();
+      const res = await fetch(`/api/shifts/summary${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: Summary = await res.json();
       setSum(data);
@@ -328,25 +300,22 @@ export default function StatsPage() {
 
   function applyFilters() {
     setApplied(true);
-    loadSummary();
     const base = buildParams().toString();
+    loadSummary(base);
     loadList(true, base);
   }
 
-  // Quick filter loader (also updates bottom list)
   async function loadQuick(k: QuickKey) {
     setQuick(k);
     setQuickLoading(true);
     setQuickErr(null);
-    setApplied(false); // hide big "Applied Filters" bubble when using quick chips
+    setApplied(false);
     try {
       const q = buildQuickParams(k).toString();
       const res = await fetch(`/api/shifts/summary${q ? `?${q}` : ''}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: Summary = await res.json();
       setQuickSum(data);
-
-      // Also refresh bottom list to quick range
       await loadList(true, q);
     } catch {
       setQuickErr('Failed to load quick stats.');
@@ -355,14 +324,12 @@ export default function StatsPage() {
     }
   }
 
-  // Initial load (show something, but do not mark "applied")
   useEffect(() => {
     (async () => {
       await loadSummary();
       await loadList(true, buildParams().toString());
-      await loadQuick('ytd'); // default quick chip selection
+      await loadQuick('ytd');
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const total = sum?.total ?? 0;
@@ -371,11 +338,7 @@ export default function StatsPage() {
   const hourly = sum?.hourly ?? 0;
   const perDown = sum?.perDown ?? 0;
   const shiftCount = sum?.count ?? 0;
-
-  // Pretty “Filtered by” preview (uses DOW names)
   const filterLabel = prettySpecificLabel({ weekDate, selectedDows, month, year });
-
-  // Quick chip labels
   const QUICK_LABEL: Record<QuickKey, string> = {
     all: 'Lifetime',
     ytd: 'Year to Date',
@@ -384,13 +347,11 @@ export default function StatsPage() {
     curWeek: 'Current Week',
     lastWeek: 'Last Week',
   };
-
-  // List title: Specific label when applied; otherwise quick label
   const listTitle = `${applied ? filterLabel : QUICK_LABEL[quick]} Shifts`;
 
   return (
     <main className="space-y-4">
-      {/* Header (no Home button) */}
+      {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Detailed Income Analysis</h1>
         <p className="mt-1 text-sm text-slate-600">
@@ -405,7 +366,6 @@ export default function StatsPage() {
           <BackButton />
         </div>
 
-        {/* Chips */}
         <div className="flex flex-wrap gap-2">
           {(['all', 'ytd', 'curMonth', 'lastMonth', 'curWeek', 'lastWeek'] as QuickKey[]).map(
             (k) => {
@@ -425,53 +385,21 @@ export default function StatsPage() {
           )}
         </div>
 
-        {/* Quick results bubble — same styling, mobile-friendly 2-row layout */}
-        <div className="mt-3 rounded-2xl border border-emerald-200/60 bg-white/70 p-3 text-sm shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
-          {quickErr ? (
-            <span className="text-rose-600">{quickErr}</span>
-          ) : quickLoading ? (
-            <span className="text-slate-600">Loading…</span>
-          ) : (
-            <div className="flex flex-col gap-y-1 sm:flex-row sm:flex-wrap sm:items-center">
-              {/* xs mobile: two lines, no shifts */}
-              <div className="flex items-center gap-x-3 sm:hidden">
-                <span className="text-slate-500">{QUICK_LABEL[quick]}</span>
-                <span className="text-slate-400">•</span>
-                <span className="font-medium text-slate-900">{money(quickSum?.total ?? 0)}</span>
-              </div>
-              <div className="flex items-center gap-x-3 sm:hidden">
-                <span className="font-medium text-slate-800">
-                  ${num(quickSum?.hourly ?? 0)} / h
-                </span>
-                <span className="text-slate-400">•</span>
-                <span className="font-medium text-slate-800">
-                  ${num(quickSum?.perDown ?? 0)} / down
-                </span>
-              </div>
-
-              {/* sm+ desktop: one line with shifts */}
-              <div className="hidden flex-wrap items-center gap-x-3 sm:flex">
-                <span className="text-slate-500">{QUICK_LABEL[quick]}</span>
-                <span className="font-medium text-slate-900">{money(quickSum?.total ?? 0)}</span>
-                <span className="text-slate-400">•</span>
-                <span className="font-medium text-slate-800">
-                  ${num(quickSum?.hourly ?? 0)} / h
-                </span>
-                <span className="text-slate-400">•</span>
-                <span className="font-medium text-slate-800">
-                  ${num(quickSum?.perDown ?? 0)} / down
-                </span>
-                <span className="text-slate-400">•</span>
-                <span className="text-slate-500">{compact(quickSum?.count ?? 0)} shifts</span>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Quick bubble */}
+        <StatsResultsBubble
+          label={QUICK_LABEL[quick]}
+          total={quickSum?.total}
+          hourly={quickSum?.hourly}
+          perDown={quickSum?.perDown}
+          count={quickSum?.count}
+          loading={quickLoading}
+          error={quickErr}
+          showCount
+        />
       </div>
 
-      {/* Specific Filters – cleaner layout, buttons bottom-left */}
+      {/* Specific Filters */}
       <div className="card">
-        {/* Section header */}
         <div className="mb-3">
           <div className="text-sm font-medium text-slate-900">Specific Filters</div>
           <div className="text-xs text-slate-500">
@@ -479,9 +407,7 @@ export default function StatsPage() {
           </div>
         </div>
 
-        {/* Top row: Week / Year / Month / DOW */}
         <div className="grid gap-3 sm:grid-cols-6">
-          {/* Week picker (Mon–Sun) */}
           <div className="sm:col-span-2">
             <label className="text-xs text-slate-600">Week of (Mon–Sun)</label>
             <input
@@ -496,7 +422,6 @@ export default function StatsPage() {
             </div>
           </div>
 
-          {/* Year */}
           <div className="sm:col-span-2">
             <label className="text-xs text-slate-600">Year</label>
             <select
@@ -505,7 +430,6 @@ export default function StatsPage() {
               onChange={(e) => setYear(e.target.value)}
               disabled={!!weekDate}
               aria-disabled={!!weekDate}
-              title={weekDate ? 'Disabled while Week filter is active' : undefined}
             >
               {yearOpts.map((y) => (
                 <option key={y.v || 'all'} value={y.v}>
@@ -515,7 +439,6 @@ export default function StatsPage() {
             </select>
           </div>
 
-          {/* Month */}
           <div className="sm:col-span-2">
             <label className="text-xs text-slate-600">Month</label>
             <select
@@ -524,7 +447,6 @@ export default function StatsPage() {
               onChange={(e) => setMonth(e.target.value)}
               disabled={!!weekDate}
               aria-disabled={!!weekDate}
-              title={weekDate ? 'Disabled while Week filter is active' : undefined}
             >
               {MONTHS.map((m) => (
                 <option key={m.v || 'all'} value={m.v}>
@@ -534,7 +456,6 @@ export default function StatsPage() {
             </select>
           </div>
 
-          {/* DOW chips */}
           <div className="sm:col-span-6">
             <label className="text-xs text-slate-600">Day(s) of Week</label>
             <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by day of week">
@@ -556,10 +477,8 @@ export default function StatsPage() {
           </div>
         </div>
 
-        {/* Divider */}
         <div className="my-4 h-px w-full bg-slate-200/70" />
 
-        {/* Casino / Room chips */}
         <div>
           <label className="text-xs text-slate-600">Casino / Room</label>
           <div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto">
@@ -582,7 +501,6 @@ export default function StatsPage() {
           </div>
         </div>
 
-        {/* Actions & summary (buttons bottom-left) */}
         <div className="mt-4 flex flex-col gap-2">
           <div className="flex flex-wrap gap-2">
             <button
@@ -596,42 +514,23 @@ export default function StatsPage() {
               Reset
             </button>
           </div>
-          <div className="text-[11px] text-slate-500">Filtered by: {filterLabel}</div>
+          <div className="text-[11px] text-slate-500">
+            Filtered by: {prettySpecificLabel({ weekDate, selectedDows, month, year })}
+          </div>
         </div>
 
-        {/* Results bubble (Specific) — shows selected label, mobile-friendly rows */}
+        {/* Specific results bubble using the SAME component/style as Quick */}
         {applied && (
-          <div className="mt-4 rounded-2xl border border-emerald-300/70 bg-emerald-50 p-4 text-base shadow-sm">
-            {err ? (
-              <span className="text-rose-600">{err}</span>
-            ) : (
-              <div className="flex flex-col gap-y-1 sm:flex-row sm:flex-wrap sm:items-center">
-                {/* xs mobile: two lines, no shifts */}
-                <div className="flex items-center gap-x-4 sm:hidden">
-                  <span className="text-slate-600">{filterLabel}</span>
-                  <span className="text-slate-400">•</span>
-                  <span className="font-semibold text-slate-900">{money(total)}</span>
-                </div>
-                <div className="flex items-center gap-x-4 sm:hidden">
-                  <span className="font-medium text-slate-800">${num(hourly)} / h</span>
-                  <span className="text-slate-400">•</span>
-                  <span className="font-medium text-slate-800">${num(perDown)} / down</span>
-                </div>
-
-                {/* sm+ desktop: one line with shifts */}
-                <div className="hidden flex-wrap items-center gap-x-4 sm:flex">
-                  <span className="text-slate-600">{filterLabel}</span>
-                  <span className="font-semibold text-slate-900">{money(total)}</span>
-                  <span className="text-slate-400">•</span>
-                  <span className="font-medium text-slate-800">${num(hourly)} / h</span>
-                  <span className="text-slate-400">•</span>
-                  <span className="font-medium text-slate-800">${num(perDown)} / down</span>
-                  <span className="text-slate-400">•</span>
-                  <span className="text-slate-600">{compact(shiftCount)} shifts</span>
-                </div>
-              </div>
-            )}
-          </div>
+          <StatsResultsBubble
+            label={prettySpecificLabel({ weekDate, selectedDows, month, year })}
+            total={total}
+            hourly={hourly}
+            perDown={perDown}
+            count={shiftCount}
+            loading={loading}
+            error={err}
+            showCount
+          />
         )}
       </div>
 
@@ -639,9 +538,9 @@ export default function StatsPage() {
       <div className="card">
         <div className="mb-2 flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">{listTitle}</h2>
+            <h2 className="text-lg font-semibold text-slate-900">{`${applied ? prettySpecificLabel({ weekDate, selectedDows, month, year }) : QUICK_LABEL[quick]} Shifts`}</h2>
             <p className="mt-0.5 text-xs text-slate-600">
-              Most recent first • {compact(shiftCount || 0)} total
+              Most recent first • {compact(sum?.count || 0)} total
             </p>
           </div>
           <div className="flex gap-2">
@@ -693,7 +592,6 @@ export default function StatsPage() {
           )}
         </div>
 
-        {/* Bottom-right "more…" */}
         <div className="mt-3 flex justify-end">
           {hasMore && (
             <button
