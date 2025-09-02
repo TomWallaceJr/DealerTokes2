@@ -1,188 +1,69 @@
-// app/api/shifts/route.ts
-import { authOptions } from '@/lib/auth';
+// ============================================================================
+// File: /app/api/shifts/route.ts
+// Purpose: List (optional date range) & create shifts
+// ============================================================================
+import { roundQuarterUp, ymdToUtcDate } from '@/lib/calc';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
-/** "YYYY-MM-DD" → Date at UTC midnight */
-function ymdToUTCDate(ymd: unknown): Date {
-  if (typeof ymd !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
-    throw new Error('Invalid date format (expected YYYY-MM-DD)');
-  }
-  const [y, m, d] = ymd.split('-').map(Number);
-  return new Date(Date.UTC(y, (m as number) - 1, d as number));
-}
+const CreateSchema = z.object({
+  userId: z.string(), // TODO: derive from session in production
+  date: z.string().refine((s) => /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.test(s), 'Invalid date'),
+  casino: z.string().min(1).max(120),
+  hours: z.number().positive().max(24),
+  downs: z.number().min(0).max(1000).default(0),
+  tokesCash: z.number().int().min(0).max(100000).default(0),
+  notes: z.string().max(500).optional().nullable(),
+});
 
-/** Round to nearest 0.25 */
-function roundQuarter(n: number) {
-  return Math.round(n * 4) / 4;
-}
+type ListQuery = { from?: string | null; to?: string | null; userId?: string | null };
 
-function toNonNegInt(v: unknown): number {
-  const n = Number(v);
-  if (!Number.isFinite(n) || n < 0) return 0;
-  return Math.round(n);
-}
-
-export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
+  const q: ListQuery = {
+    from: searchParams.get('from'),
+    to: searchParams.get('to'),
+    userId: searchParams.get('userId'),
+  };
 
-  // pagination
-  const limit = Math.max(1, Math.min(100, Number(searchParams.get('limit') ?? 20)));
-  const offset = Math.max(0, Number(searchParams.get('offset') ?? 0));
+  const where: any = {};
+  if (q.userId) where.userId = q.userId;
+  if (q.from || q.to) where.date = {};
+  if (q.from) where.date.gte = ymdToUtcDate(q.from);
+  if (q.to) where.date.lte = ymdToUtcDate(q.to);
 
-  // filters
-  const year = searchParams.get('year'); // "2025"
-  const month = searchParams.get('month'); // "1".."12"
-  const dowRaw = searchParams.get('dow'); // "1,2,3"
-  const dows = dowRaw
-    ? dowRaw
-        .split(',')
-        .map((s) => Number(s))
-        .filter(Number.isInteger)
-    : [];
-
-  const casinos = searchParams
-    .getAll('casino')
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  // explicit range (takes precedence over year/month)
-  const from = searchParams.get('from'); // ISO
-  const to = searchParams.get('to'); // ISO
-
-  const where: any = { userId: session.user.id };
-  if (casinos.length) where.casino = { in: casinos };
-
-  if (from || to) {
-    where.date = {
-      ...(from ? { gte: new Date(from) } : {}),
-      ...(to ? { lt: new Date(to) } : {}),
-    };
-  } else if (year) {
-    const y = Number(year);
-    if (!Number.isNaN(y)) {
-      if (month) {
-        const m = Number(month) - 1;
-        if (m >= 0 && m <= 11) {
-          where.date = {
-            gte: new Date(Date.UTC(y, m, 1)),
-            lt: new Date(Date.UTC(y, m + 1, 1)),
-          };
-        }
-      } else {
-        where.date = {
-          gte: new Date(Date.UTC(y, 0, 1)),
-          lt: new Date(Date.UTC(y + 1, 0, 1)),
-        };
-      }
-    }
-  }
-
-  // Pull superset; we’ll apply some filters in-memory (DOW & "month across years")
-  const superset = await prisma.shift.findMany({
+  const list = await prisma.shift.findMany({
     where,
     orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-    select: {
-      id: true,
-      userId: true,
-      date: true,
-      casino: true,
-      hours: true,
-      downs: true,
-      tokesCash: true,
-      notes: true,
-      createdAt: true,
-      updatedAt: true,
-    },
   });
-
-  // In-memory DOW and "month across all years" filters
-  const filtered = superset.filter((s) => {
-    const d = new Date(s.date); // stored at UTC midnight
-    if (!from && !to && !year && month) {
-      const m = Number(month);
-      if (!Number.isNaN(m) && d.getUTCMonth() + 1 !== m) return false;
-    }
-    if (dows.length) {
-      const day = d.getUTCDay(); // 0..6, UTC
-      if (!dows.includes(day)) return false;
-    }
-    return true;
-  });
-
-  const total = filtered.length;
-  const items = filtered.slice(offset, offset + limit);
-  const hasMore = offset + items.length < total;
-
-  return NextResponse.json({ items, total, limit, offset, hasMore });
+  return NextResponse.json(list);
 }
 
-export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  let body: any;
+export async function POST(req: NextRequest) {
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    const body = await req.json();
+    const input = CreateSchema.parse(body);
+    const created = await prisma.shift.create({
+      data: {
+        userId: input.userId,
+        date: ymdToUtcDate(input.date),
+        casino: input.casino.trim(),
+        hours: roundQuarterUp(input.hours),
+        downs: Math.max(0, roundQuarterUp(input.downs ?? 0)),
+        tokesCash: Math.max(0, Math.floor(input.tokesCash ?? 0)),
+        notes: input.notes?.trim() || null,
+      },
+    });
+    return NextResponse.json(created, { status: 201 });
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      return NextResponse.json(
+        { error: 'A shift for this date already exists for this user.' },
+        { status: 409 },
+      );
+    }
+    if (err?.issues) return NextResponse.json({ error: err.issues }, { status: 400 });
+    return NextResponse.json({ error: 'Failed to create shift' }, { status: 500 });
   }
-
-  const { date, casino, hours, tokesCash, downs, notes } = body ?? {};
-
-  if (!date) return NextResponse.json({ error: 'date is required' }, { status: 400 });
-
-  if (typeof casino !== 'string' || !casino.trim()) {
-    return NextResponse.json({ error: 'casino is required' }, { status: 400 });
-  }
-
-  // Normalize date
-  let dateUtc: Date;
-  try {
-    dateUtc = ymdToUTCDate(date); // UTC midnight
-  } catch {
-    return NextResponse.json({ error: 'Invalid date (YYYY-MM-DD)' }, { status: 400 });
-  }
-
-  // Normalize numbers (server rounds to 0.25)
-  const hoursNum = roundQuarter(Number(hours));
-  const downsNum = roundQuarter(Number(downs ?? 0));
-  const tokesDollars = toNonNegInt(tokesCash);
-
-  if (!Number.isFinite(hoursNum) || hoursNum <= 0) {
-    return NextResponse.json({ error: 'hours must be a positive number' }, { status: 400 });
-  }
-  if (!Number.isFinite(downsNum) || downsNum < 0) {
-    return NextResponse.json({ error: 'downs must be ≥ 0' }, { status: 400 });
-  }
-
-  // Create WITHOUT any clockIn/clockOut (hours-only model)
-  const row = await prisma.shift.create({
-    data: {
-      userId: session.user.id,
-      date: dateUtc, // stored as UTC midnight
-      casino: casino.trim(),
-      hours: hoursNum,
-      downs: downsNum,
-      tokesCash: tokesDollars,
-      notes: typeof notes === 'string' && notes.trim() ? notes : null,
-    },
-    select: {
-      id: true,
-      date: true,
-      casino: true,
-      hours: true,
-      downs: true,
-      tokesCash: true,
-      notes: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
-
-  return NextResponse.json(row, { status: 201 });
 }
