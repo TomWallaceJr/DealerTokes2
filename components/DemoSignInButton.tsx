@@ -1,34 +1,47 @@
-// components/DemoSignInButton.tsx
 'use client';
 
 import { signIn } from 'next-auth/react';
-import { useState } from 'react';
+import * as React from 'react';
 
-const DEMO_EMAIL = 'example@example.com';
-const DEMO_PASSWORD = 'Demo123!';
+type DemoSignInButtonProps = React.PropsWithChildren<{
+  className?: string;
+  /** Render like a text link instead of a button */
+  asLink?: boolean;
+}>;
 
-export default function DemoSignInButton() {
-  const [loading, setLoading] = useState(false);
+const DemoSignInButton: React.FC<DemoSignInButtonProps> = ({ className, asLink, children }) => {
+  const handleClick = async () => {
+    await signIn('credentials', {
+      // You can swap these to NEXT_PUBLIC_* envs if you prefer
+      email: process.env.NEXT_PUBLIC_DEMO_EMAIL ?? 'example@example.com',
+      password: process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? 'Demo123!',
+      callbackUrl: '/',
+      redirect: true,
+    });
+  };
+
+  if (asLink) {
+    return (
+      <button
+        type="button"
+        onClick={handleClick}
+        className={['link', className].filter(Boolean).join(' ')}
+        aria-label="Try the demo"
+      >
+        {children ?? 'demo'}
+      </button>
+    );
+  }
 
   return (
     <button
-      className="btn btn-ghost w-full sm:w-auto"
-      onClick={async () => {
-        if (loading) return;
-        setLoading(true);
-        await signIn('credentials', {
-          email: DEMO_EMAIL,
-          password: DEMO_PASSWORD,
-          callbackUrl: '/',
-          redirect: true,
-        });
-        setLoading(false);
-      }}
-      disabled={loading}
-      aria-label="Use demo account"
-      title={`Sign in as ${DEMO_EMAIL}`}
+      type="button"
+      onClick={handleClick}
+      className={['btn', className].filter(Boolean).join(' ')}
     >
-      {loading ? 'Signing in…' : 'Use demo account'}
+      {children ?? 'Try Demo'}
     </button>
   );
-}
+};
+
+export default DemoSignInButton;

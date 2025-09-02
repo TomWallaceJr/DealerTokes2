@@ -19,6 +19,7 @@ export default async function HomePage() {
   const userName = displayName(session?.user?.name, session?.user?.email);
 
   if (!session) {
+    // Public/marketing page
     return (
       <main className="space-y-10">
         {/* HERO */}
@@ -62,7 +63,7 @@ export default async function HomePage() {
             </div>
             <h3 className="text-sm font-semibold text-slate-900">Log in seconds</h3>
             <p className="mt-1 text-sm text-slate-600">
-              Date, room, clock in/out, downs, and cash tokes—optimized for speed on mobile.
+              Date, room, hours, downs, and cash tokes—optimized for speed on mobile.
             </p>
           </div>
 
@@ -97,25 +98,6 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* HOW IT WORKS */}
-        <section className="card">
-          <h2 className="mb-2 text-lg font-semibold text-slate-900">How it works</h2>
-          <ol className="grid list-decimal gap-3 pl-5 sm:grid-cols-3">
-            <li className="text-sm text-slate-700">
-              <span className="font-medium text-slate-900">Create your account.</span> It takes
-              under a minute.
-            </li>
-            <li className="text-sm text-slate-700">
-              <span className="font-medium text-slate-900">Log shifts as you go.</span> Enter your
-              workday income in seconds.
-            </li>
-            <li className="text-sm text-slate-700">
-              <span className="font-medium text-slate-900">See your income clearly.</span> Instantly
-              view totals, $/h, and $/down.
-            </li>
-          </ol>
-        </section>
-
         {/* NOTE */}
         <section className="rounded-2xl border border-emerald-200/60 bg-white/70 p-4 text-sm text-slate-700 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
           Prefer not to create an account yet? Use the demo—then sign up when you’re ready.
@@ -124,12 +106,27 @@ export default async function HomePage() {
     );
   }
 
-  // Authenticated view
+  // Authenticated dashboard
   return (
     <main className="space-y-6">
+      {/* Always at the very top */}
       <HomeHeader userName={userName} />
-      <CalendarPicker />
-      <HomeQuickActions />
+
+      {/* On desktop: Quick Actions (horizontal) ABOVE Calendar
+          On mobile: Calendar FIRST, then Quick Actions stacked vertically */}
+      <section className="grid gap-4">
+        {/* Calendar (mobile-first order = first) */}
+        <div className="order-1 md:order-2">
+          <CalendarPicker />
+        </div>
+
+        {/* Quick actions: base (mobile) comes after calendar, on lg it moves above */}
+        <div className="order-2 md:order-1">
+          {/* HomeQuickActions already lays out horizontally on sm+ via its grid classes,
+              and vertically (one-per-row) on xs by default. */}
+          <HomeQuickActions />
+        </div>
+      </section>
     </main>
   );
 }

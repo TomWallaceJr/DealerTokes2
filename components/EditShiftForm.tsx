@@ -15,14 +15,38 @@ type ShiftForEdit = {
   notes: string;
 };
 
-// ----- helpers (match ShiftForm UX) -----
+// ---------- format helpers ----------
+function money(n: number, digits = 0) {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: digits,
+  }).format(n ?? 0);
+}
+function num(n: number, digits = 2) {
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(n ?? 0);
+}
+function compact(n: number, digits = 1) {
+  return new Intl.NumberFormat(undefined, {
+    notation: 'compact',
+    maximumFractionDigits: digits,
+  }).format(n ?? 0);
+}
+function parseLocalYmd(ymd: string) {
+  const [y, m, d] = ymd.split('-').map((x) => parseInt(x, 10));
+  return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+}
+
+// ---------- numeric UX helpers (match ShiftForm) ----------
 const ceilQuarter = (n: number) => Math.ceil(n * 4) / 4;
 const parseNum = (v: string) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
 const cleanDecimal = (s: string) => {
-  // allow digits and a single dot
   const only = s.replace(/[^\d.]/g, '');
   const [head, ...rest] = only.split('.');
   return head + (rest.length ? '.' + rest.join('').replace(/\./g, '') : '');
@@ -36,10 +60,10 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
   const [date, setDate] = useState(shift.date);
   const [casino, setCasino] = useState(shift.casino);
 
-  // display strings (no spinners)
+  // display strings (no number spinner)
   const [hoursStr, setHoursStr] = useState<string>(fmtNum(Number(shift.hours ?? 0)));
   const [downsStr, setDownsStr] = useState<string>(fmtNum(Number(shift.downs ?? 0)));
-  const [cashoutStr, setCashoutStr] = useState<string>(String(shift.tokesCash ?? 0)); // dollars
+  const [cashoutStr, setCashoutStr] = useState<string>(String(shift.tokesCash ?? 0)); // whole $
 
   const [notes, setNotes] = useState<string>(shift.notes ?? '');
   const [rooms, setRooms] = useState<string[]>([]);
@@ -131,9 +155,64 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
     }
   }
 
+  // ---- Results bubble content ----
+  const day = parseLocalYmd(date);
+  const dayLabel = new Intl.DateTimeFormat(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(day);
+
+  const resultsLabel = `${dayLabel} • ${casino || 'Room'}`;
+  const total = tokesCash;
+  const hourly = perHour;
+  const pDown = perDown;
+  const shiftCount = 1; // editing a single shift
+
   return (
-    <div className="card space-y-4">
-      {/* Header */}
+    <div className="card relative space-y-4">
+      {/* Back — restored to upper-right, with breathing room */}
+      <BackButton
+        className="absolute top-3 right-3 z-10 h-9 w-9 justify-center gap-0 px-0 sm:top-4 sm:right-4 sm:h-auto sm:w-auto sm:gap-2 sm:px-3.5"
+        title="Back"
+        aria-label="Go back"
+      />
+
+      {/* Results bubble (refined) */}
+      <div className="m-5 mt-11 rounded-2xl border border-emerald-300/70 bg-gradient-to-br from-emerald-50 to-teal-50 p-4 shadow-sm">
+        {error ? (
+          <span className="text-rose-600">{error}</span>
+        ) : (
+          <>
+            {/* Mobile: two rows, compact without shift count */}
+            <div className="flex flex-col gap-1 sm:hidden">
+              <div className="flex items-center gap-3">
+                <span className="text-[13px] text-slate-600">{resultsLabel}</span>
+                <span className="text-slate-400">•</span>
+                <span className="text-[15px] font-semibold text-slate-900">{money(total)}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="font-medium text-slate-800">${num(hourly)} / h</span>
+                <span className="text-slate-400">•</span>
+                <span className="font-medium text-slate-800">${num(pDown)} / down</span>
+              </div>
+            </div>
+
+            {/* Desktop: one clean line with separators + shift count */}
+            <div className="hidden flex-wrap items-center gap-x-4 sm:flex">
+              <span className="text-slate-600">{resultsLabel}</span>
+              <span className="font-semibold text-slate-900">{money(total)}</span>
+              <span className="text-slate-400">•</span>
+              <span className="font-medium text-slate-800">${num(hourly)} / h</span>
+              <span className="text-slate-400">•</span>
+              <span className="font-medium text-slate-800">${num(pDown)} / down</span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Header row */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-slate-900">Edit Shift</h2>
@@ -141,8 +220,8 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
             Update hours, downs, and cashout. Changes apply immediately.
           </p>
         </div>
-        {/* Back (icon-only on mobile) */}
-        <BackButton className="hidden sm:inline-flex" />
+        {/* (BackButton is already positioned absolutely) */}
+        <span className="hidden sm:block" />
       </div>
 
       {/* Date + Casino */}
@@ -249,7 +328,7 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
       {/* Footer: KPIs + actions */}
       <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="text-slate-600">
-          Total: ${tokesCash} • $/h: {perHour.toFixed(2)} • $/down: {perDown.toFixed(2)}
+          Total: {money(tokesCash, 0)} • $/h: {num(perHour)} • $/down: {num(perDown)}
         </div>
 
         <div className="flex w-full flex-col gap-2 sm:w-auto">
@@ -270,7 +349,6 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
             </button>
           </div>
 
-          {/* inline error */}
           {error && <div className="text-xs text-rose-600">{error}</div>}
         </div>
       </div>

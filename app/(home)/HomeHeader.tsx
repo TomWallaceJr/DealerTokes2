@@ -1,6 +1,7 @@
-// app/(home)/HomeHeader.tsx (or inline in your page)
+// app/(home)/HomeHeader.tsx
 'use client';
 
+import Hideable from '@/components/Hideable';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -105,12 +106,14 @@ export default function HomeHeader({ userName }: { userName?: string | null }) {
         </Link>
       </div>
 
-      {/* Snapshot pills */}
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-        <Snapshot label="This Week" loading={loading} s={week} />
-        <Snapshot label="This Month" loading={loading} s={month} />
-        <Snapshot label="YTD" loading={loading} s={ytd} />
-      </div>
+      {/* Snapshot pills — hideable ONLY for this block */}
+      <Hideable id="header-snapshot" className="mt-3" hiddenLabel="Snapshot hidden">
+        <div className="grid gap-2 sm:grid-cols-3">
+          <Snapshot label="This Week" loading={loading} s={week} />
+          <Snapshot label="This Month" loading={loading} s={month} />
+          <Snapshot label="YTD" loading={loading} s={ytd} />
+        </div>
+      </Hideable>
     </section>
   );
 }
