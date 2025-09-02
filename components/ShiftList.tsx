@@ -1,4 +1,9 @@
-// components/ShiftList.tsx
+// ============================================================================
+// File: /components/ShiftList.tsx
+// Purpose: Client list view; robust to both PageResp and array API shapes
+// - Fetches /api/shifts?limit&offset
+// - Shows newest first (API already sorted desc)
+// ============================================================================
 'use client';
 
 import { dateUTC } from '@/lib/date';
@@ -8,7 +13,7 @@ import BackButton from './BackButton';
 
 type Shift = {
   id: string;
-  date: string; // ISO
+  date: string; // YYYY-MM-DD
   casino: string;
   hours: number;
   tokesCash: number;
@@ -33,12 +38,39 @@ const money = (n: number) =>
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(n);
-
 const num = (n: number, digits = 2) =>
   new Intl.NumberFormat(undefined, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(n);
+
+function normalizeItems(json: any): {
+  items: Shift[];
+  total: number;
+  hasMore: boolean;
+  limit: number;
+  offset: number;
+} {
+  if (json && Array.isArray(json.items)) {
+    return {
+      items: json.items as Shift[],
+      total: Number(json.total ?? json.items.length),
+      hasMore: Boolean(json.hasMore ?? false),
+      limit: Number(json.limit ?? PAGE_SIZE),
+      offset: Number(json.offset ?? 0),
+    };
+  }
+  if (Array.isArray(json)) {
+    return {
+      items: json as Shift[],
+      total: json.length,
+      hasMore: false,
+      limit: PAGE_SIZE,
+      offset: 0,
+    };
+  }
+  return { items: [], total: 0, hasMore: false, limit: PAGE_SIZE, offset: 0 };
+}
 
 export default function ShiftList() {
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -50,16 +82,15 @@ export default function ShiftList() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function fetchPage(nextOffset: number, append = false) {
-    const params = new URLSearchParams({
-      limit: String(PAGE_SIZE),
-      offset: String(nextOffset),
-    });
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(nextOffset) });
     const res = await fetch(`/api/shifts?${params.toString()}`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data: PageResp = await res.json();
-    setHasMore(data.hasMore);
-    setOffset(data.offset + data.items.length);
-    setShifts((prev) => (append ? [...prev, ...data.items] : data.items));
+    const raw = await res.json();
+    const page = normalizeItems(raw);
+
+    setHasMore(page.hasMore);
+    setOffset(page.offset + page.items.length);
+    setShifts((prev) => (append ? [...prev, ...page.items] : page.items));
   }
 
   async function initialLoad() {
@@ -67,7 +98,7 @@ export default function ShiftList() {
       setLoading(true);
       setError(null);
       await fetchPage(0, false);
-    } catch {
+    } catch (e) {
       setError('Failed to load shifts. Try again.');
     } finally {
       setLoading(false);
@@ -86,8 +117,7 @@ export default function ShiftList() {
   }
 
   useEffect(() => {
-    initialLoad();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    initialLoad(); /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, []);
 
   async function removeShift(id: string) {
@@ -110,13 +140,13 @@ export default function ShiftList() {
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-semibold text-slate-900">Logged Shifts</h2>
-          <span className="stat hidden sm:inline-flex">Most recent first</span>
+          <span className="stat hidden sm:inline-flex">Newest first</span>
         </div>
         <div className="flex shrink-0 gap-2">
           <button className="btn" onClick={initialLoad} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
-          <BackButton />
+          <BackButton title="Back" aria-label="Go back" />
         </div>
       </div>
 
@@ -133,7 +163,6 @@ export default function ShiftList() {
           const total = s.tokesCash ?? 0;
           const perHour = s.hours > 0 ? total / s.hours : 0;
           const perDown = s.downs > 0 ? total / s.downs : 0;
-
           return (
             <div key={s.id} className="relative">
               {/* Delete button */}

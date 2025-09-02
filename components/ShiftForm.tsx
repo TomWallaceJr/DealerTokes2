@@ -1,76 +1,86 @@
-// components/ShiftForm.tsx
+// ============================================================================
+// File: /components/ShiftForm.tsx
+// Purpose: Create-shift form aligned to API (POST /api/shifts), accepts initialDate
+// ============================================================================
 'use client';
 
-import BackButton from '@/components/BackButton';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
-function ymdLocal(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+type NewShift = {
+  date: string; // YYYY-MM-DD
+  casino: string;
+  hours: number; // quarter increments
+  downs: number; // quarter increments
+  tokesCash: number; // whole dollars
+  notes?: string | null;
+};
+
+// ---- format helpers
+function money(n: number, digits = 0) {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: digits,
+  }).format(n ?? 0);
+}
+function num(n: number, digits = 2) {
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(n ?? 0);
+}
+function parseLocalYmd(ymd: string) {
+  const [y, m, d] = ymd.split('-').map((x) => parseInt(x, 10));
+  return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
 }
 
+// ---- numeric UX helpers
 const ceilQuarter = (n: number) => Math.ceil(n * 4) / 4;
-const parseNum = (v: string) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-};
+const parseNum = (v: string) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const cleanDecimal = (s: string) => {
-  // allow digits and a single dot
   const only = s.replace(/[^\d.]/g, '');
   const [head, ...rest] = only.split('.');
   return head + (rest.length ? '.' + rest.join('').replace(/\./g, '') : '');
 };
 const fmtNum = (n: number) => String(parseFloat(n.toFixed(2)));
 
-type LastShiftResp = {
-  items: { casino: string }[];
-  total: number;
-  hasMore: boolean;
-  limit: number;
-  offset: number;
-};
+function todayYmd(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
-export default function ShiftForm({
-  onSaved,
-  initialDate,
-}: {
-  onSaved?: () => void;
-  initialDate?: string; // "YYYY-MM-DD"
-}) {
+export default function ShiftForm({ initialDate }: { initialDate?: string }) {
   const router = useRouter();
 
-  // default to LOCAL today; override if initialDate provided
-  const [date, setDate] = useState<string>(initialDate ?? ymdLocal(new Date()));
-  useEffect(() => {
-    if (initialDate && initialDate !== date) setDate(initialDate);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialDate]);
-
+  // fields
+  const [date, setDate] = useState<string>(initialDate ?? todayYmd());
   const [casino, setCasino] = useState<string>('');
-
-  // display strings (prevent spinners; clear "0" on focus)
   const [hoursStr, setHoursStr] = useState<string>('0');
   const [downsStr, setDownsStr] = useState<string>('0');
-  const [cashoutStr, setCashoutStr] = useState<string>('0'); // whole dollars
+  const [cashoutStr, setCashoutStr] = useState<string>('0'); // whole $
+  const [notes, setNotes] = useState<string>('');
+  const [rooms, setRooms] = useState<string[]>([]);
 
-  // numeric values for KPIs/payload
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // derived values
   const hours = useMemo(() => parseNum(hoursStr), [hoursStr]);
   const downs = useMemo(() => parseNum(downsStr), [downsStr]);
   const tokesCash = useMemo(() => Math.max(0, Math.ceil(parseNum(cashoutStr))), [cashoutStr]);
 
-  const [notes, setNotes] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [rooms, setRooms] = useState<string[]>([]);
+  const perHour = hours > 0 ? tokesCash / hours : 0;
+  const perDown = downs > 0 ? tokesCash / downs : 0;
 
-  // Load rooms for datalist
+  // datalist rooms
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/rooms');
+        const res = await fetch('/api/rooms', { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         if (Array.isArray(data.rooms)) setRooms(data.rooms);
@@ -80,32 +90,7 @@ export default function ShiftForm({
     })();
   }, []);
 
-  // Prefer last used room from localStorage, then fall back to most recent shift
-  useEffect(() => {
-    if (casino.trim()) return;
-    const local = typeof window !== 'undefined' ? localStorage.getItem('lastRoom') : null;
-    if (local) {
-      setCasino(local);
-      return;
-    }
-    (async () => {
-      try {
-        const res = await fetch('/api/shifts?limit=1', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data: LastShiftResp = await res.json();
-        const last = data.items?.[0]?.casino;
-        if (last && !casino.trim()) setCasino(last);
-      } catch {
-        /* ignore */
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const perHour = hours > 0 ? tokesCash / hours : 0;
-  const perDown = downs > 0 ? tokesCash / downs : 0;
-
-  async function save() {
+  async function create() {
     setError(null);
     if (!casino.trim() || hours <= 0) {
       setError('Please enter a room and a positive number of hours.');
@@ -113,68 +98,83 @@ export default function ShiftForm({
     }
     setSaving(true);
     try {
-      const normalized = {
+      const body: NewShift = {
         date,
         casino: casino.trim(),
-        hours: ceilQuarter(hours), // round up to 0.25
-        tokesCash, // whole dollars (rounded up)
-        downs: ceilQuarter(Math.max(0, downs)),
-        notes: notes || undefined,
+        hours: ceilQuarter(hours),
+        downs: Math.max(0, ceilQuarter(downs)),
+        tokesCash, // whole dollars
+        notes: notes ? notes : undefined,
       };
 
       const res = await fetch('/api/shifts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(normalized),
+        body: JSON.stringify(body),
       });
+
       if (!res.ok) {
-        let msg = 'Save failed';
+        const text = await res.text();
+        let msg = 'Create failed';
         try {
-          const j = await res.json();
-          if (j?.error) msg = j.error;
-        } catch {}
+          const j = JSON.parse(text);
+          msg = typeof j.error === 'string' ? j.error : JSON.stringify(j.error);
+        } catch {
+          msg = text || msg;
+        }
         throw new Error(msg);
       }
 
-      // remember last room locally
       try {
-        localStorage.setItem('lastRoom', normalized.casino);
+        localStorage.setItem('lastRoom', body.casino);
       } catch {}
 
-      onSaved?.();
-      router.push('/');
+      router.push('/shifts');
       router.refresh();
     } catch (e: any) {
-      setError(e?.message || 'Save failed');
+      setError(e?.message || 'Failed to create shift.');
     } finally {
       setSaving(false);
     }
   }
 
-  const saveDisabled = saving || !casino.trim() || hours <= 0;
+  // stat bubble
+  const day = parseLocalYmd(date);
+  const dayLabel = new Intl.DateTimeFormat(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(day);
+  const resultsLabel = `${dayLabel} • ${casino || 'Room'}`;
 
   return (
-    <div className="card space-y-4">
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-slate-900">Log a Shift</h2>
-          <p className="mt-0.5 text-xs text-slate-600">Quick add your hours, downs, and cashout.</p>
-        </div>
-        {/* Top-right back button (icon-only on mobile) */}
-        <BackButton className="sm:inline-flex" />
+    <div className="card relative space-y-4">
+      {/* Results bubble */}
+      <div className="m-5 mb-0 rounded-2xl border border-emerald-300/70 bg-gradient-to-br from-emerald-50 to-teal-50 p-4 shadow-sm">
+        {error ? (
+          <span className="text-rose-600">{error}</span>
+        ) : (
+          <div className="hidden flex-wrap items-center gap-x-4 sm:flex">
+            <span className="text-slate-600">{resultsLabel}</span>
+            <span className="font-semibold text-slate-900">{money(tokesCash)}</span>
+            <span className="text-slate-400">•</span>
+            <span className="font-medium text-slate-800">${num(perHour)} / h</span>
+            <span className="text-slate-400">•</span>
+            <span className="font-medium text-slate-800">${num(perDown)} / down</span>
+          </div>
+        )}
       </div>
 
-      {/* Date + Casino in one row on sm+ */}
+      {/* Date + Casino */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="text-xs text-slate-600">Date</label>
           <input
-            type="date"
             className="input h-10"
+            type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            required
           />
         </div>
 
@@ -183,10 +183,9 @@ export default function ShiftForm({
           <input
             list="rooms"
             className="input h-10"
-            placeholder="Wind Creek"
             value={casino}
             onChange={(e) => setCasino(e.target.value)}
-            required
+            placeholder="Wind Creek"
           />
           <datalist id="rooms">
             {rooms.map((r) => (
@@ -201,13 +200,11 @@ export default function ShiftForm({
         <div>
           <label className="text-xs text-slate-600">Hours Worked</label>
           <input
+            className="input"
             type="text"
             inputMode="decimal"
-            className="input"
             value={hoursStr}
-            onFocus={() => {
-              if (hoursStr === '0') setHoursStr('');
-            }}
+            onFocus={() => hoursStr === '0' && setHoursStr('')}
             onChange={(e) => setHoursStr(cleanDecimal(e.target.value))}
             onBlur={(e) => {
               const n = parseNum(e.target.value);
@@ -215,20 +212,17 @@ export default function ShiftForm({
               else setHoursStr(fmtNum(Math.max(0.25, ceilQuarter(n))));
             }}
             placeholder="0"
-            required
           />
         </div>
 
         <div>
           <label className="text-xs text-slate-600">Cash Downs Dealt</label>
           <input
+            className="input"
             type="text"
             inputMode="decimal"
-            className="input"
             value={downsStr}
-            onFocus={() => {
-              if (downsStr === '0') setDownsStr('');
-            }}
+            onFocus={() => downsStr === '0' && setDownsStr('')}
             onChange={(e) => setDownsStr(cleanDecimal(e.target.value))}
             onBlur={(e) => {
               const n = parseNum(e.target.value);
@@ -250,17 +244,11 @@ export default function ShiftForm({
               type="text"
               inputMode="numeric"
               value={cashoutStr}
-              onFocus={() => {
-                if (cashoutStr === '0') setCashoutStr('');
-              }}
-              onChange={(e) => {
-                const only = e.target.value.replace(/[^\d.]/g, '');
-                setCashoutStr(only);
-              }}
-              onBlur={(e) => {
-                const n = parseNum(e.target.value);
-                setCashoutStr(String(Math.max(0, Math.ceil(n))));
-              }}
+              onFocus={() => cashoutStr === '0' && setCashoutStr('')}
+              onChange={(e) => setCashoutStr(e.target.value.replace(/[^\d]/g, ''))}
+              onBlur={(e) =>
+                setCashoutStr(String(Math.max(0, Math.ceil(parseNum(e.target.value)))))
+              }
               placeholder="0"
             />
           </div>
@@ -279,32 +267,14 @@ export default function ShiftForm({
         />
       </div>
 
-      {/* Footer (KPIs + actions) */}
-      <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-slate-600">
-          Total: ${tokesCash} • $/h: {perHour.toFixed(2)} • $/down: {perDown.toFixed(2)}
+      {/* Footer */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm text-slate-600">
+          Total: {money(tokesCash)} • $/h: {num(perHour)} • $/down: {num(perDown)}
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto">
-          <div className="flex gap-2">
-            <button
-              className="btn btn-primary w-full sm:w-auto"
-              onClick={save}
-              disabled={saveDisabled}
-            >
-              {saving ? 'Saving…' : 'Save Shift'}
-            </button>
-            <button
-              className="btn w-full sm:w-auto"
-              type="button"
-              onClick={() => router.push('/')}
-              disabled={saving}
-            >
-              Cancel
-            </button>
-          </div>
-          {/* Inline error under buttons */}
-          {error && <div className="text-xs text-rose-600">{error}</div>}
-        </div>
+        <button className="btn btn-primary" onClick={create} disabled={saving}>
+          {saving ? 'Creating…' : 'Create Shift'}
+        </button>
       </div>
     </div>
   );

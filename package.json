@@ -20,6 +20,7 @@
     "bcryptjs": "^3.0.2",
     "clsx": "latest",
     "date-fns": "latest",
+    "lucide-react": "^0.453.0",
     "next": "latest",
     "next-auth": "^4.24.11",
     "react": "latest",
@@ -42,9 +43,12 @@
     "tailwindcss": "latest",
     "ts-node": "latest",
     "tsx": "^4.20.5",
-    "typescript": "latest"
+    "typescript": "^5.9.2"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
+  },
+  "overrides": {
+    "cookie": "0.7.0"
   }
 }

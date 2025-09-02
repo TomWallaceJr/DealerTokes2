@@ -5,6 +5,7 @@
 import { prisma } from '@/lib/prisma';
 import { ShiftUpdateSchema, toPrismaUpdateData } from '@/lib/validation/shift';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
 export async function PATCH(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -21,7 +22,10 @@ export async function PATCH(_req: NextRequest, { params }: { params: { id: strin
         { status: 409 },
       );
     }
-    if (err?.issues) return NextResponse.json({ error: err.issues }, { status: 400 });
+    if (err instanceof z.ZodError) {
+      const msg = err.issues.map((e) => `${e.path.join('.') || 'field'}: ${e.message}`).join('; ');
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
     return NextResponse.json({ error: 'Failed to update shift' }, { status: 500 });
   }
 }

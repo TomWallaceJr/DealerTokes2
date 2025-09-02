@@ -1,4 +1,10 @@
-// components/CalendarPicker.tsx
+// ============================================================================
+// File: /components/CalendarPicker.tsx
+// Purpose: Robust calendar that tolerates both PageResp and raw array API shapes
+// - Fetches /api/shifts?from=YYYY-MM-DD&to=YYYY-MM-DD&limit=1000
+// - Aggregates tokesCash by local YYYY-MM-DD without Date parsing
+// - Falls back gracefully if API returns an array instead of {items: []}
+// ============================================================================
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -6,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Hideable from './Hideable';
 
 type Shift = { id: string; date: string; tokesCash: number };
+
 type PageResp = {
   items: Shift[];
   total: number;
@@ -44,7 +51,7 @@ function endOfMonthExclusive(d: Date) {
 }
 function mondayOf(d: Date) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const day = x.getDay(); // 0..6 (Sun..Sat)
+  const day = x.getDay();
   const delta = (day + 6) % 7; // Monday=0
   x.setDate(x.getDate() - delta);
   x.setHours(0, 0, 0, 0);
@@ -54,6 +61,26 @@ function addDays(d: Date, n: number) {
   const x = new Date(d);
   x.setDate(x.getDate() + n);
   return x;
+}
+
+function normalizeItems(json: any): Shift[] {
+  // Expected: { items: [{ id, date, tokesCash }], ... }
+  if (json && Array.isArray(json.items)) {
+    return json.items.map((s: any) => ({
+      id: String(s.id),
+      date: String(s.date).slice(0, 10),
+      tokesCash: Number(s.tokesCash ?? 0),
+    }));
+  }
+  // Fallback: API returned array of rows
+  if (Array.isArray(json)) {
+    return json.map((s: any) => ({
+      id: String(s.id),
+      date: String(s.date).slice(0, 10),
+      tokesCash: Number(s.tokesCash ?? 0),
+    }));
+  }
+  return [];
 }
 
 export default function CalendarPicker({ initialMonth, onPick }: CalendarPickerProps) {
@@ -88,18 +115,15 @@ export default function CalendarPicker({ initialMonth, onPick }: CalendarPickerP
       try {
         const from = ymdLocal(startOfMonth(cursor));
         const to = ymdLocal(endOfMonthExclusive(cursor));
-        const res = await fetch(
-          `/api/shifts?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=1000`,
-          { cache: 'no-store' },
-        );
+        const url = `/api/shifts?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=1000`;
+        const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data: PageResp = await res.json();
+        const raw = await res.json();
+        const items = normalizeItems(raw);
 
         const cash: Record<string, number> = {};
         const byDay: Record<string, Shift[]> = {};
-
-        // IMPORTANT: use the date string’s first 10 chars (YYYY-MM-DD). No Date()
-        for (const s of data.items) {
+        for (const s of items) {
           const k = (s.date || '').slice(0, 10);
           if (!k) continue;
           cash[k] = (cash[k] ?? 0) + (s.tokesCash ?? 0);
@@ -121,19 +145,14 @@ export default function CalendarPicker({ initialMonth, onPick }: CalendarPickerP
     d.getDate() === today.getDate() &&
     d.getMonth() === today.getMonth() &&
     d.getFullYear() === today.getFullYear();
-
   const inCurrentMonth = (d: Date) =>
     d.getMonth() === cursor.getMonth() && d.getFullYear() === cursor.getFullYear();
 
   function handlePick(key: string) {
     onPick?.(key);
-
     const list = shiftsByDay[key] || [];
-    if (list.length === 0) {
-      router.push(`/shifts/new?date=${encodeURIComponent(key)}`);
-    } else {
-      router.push(`/shifts/${list[0].id}`);
-    }
+    if (list.length === 0) router.push(`/shifts/new?date=${encodeURIComponent(key)}`);
+    else router.push(`/shifts/${list[0].id}`);
   }
 
   return (
@@ -211,7 +230,6 @@ export default function CalendarPicker({ initialMonth, onPick }: CalendarPickerP
               const key = ymdLocal(d);
               const cash = cashByDay[key] ?? 0;
               const hasData = cash > 0;
-
               return (
                 <button
                   key={key}
@@ -226,12 +244,9 @@ export default function CalendarPicker({ initialMonth, onPick }: CalendarPickerP
                   ].join(' ')}
                 >
                   <div className="aspect-square p-1.5 sm:p-2 md:p-2.5">
-                    {/* Day number — upper-left */}
                     <div className="absolute top-1 left-1 text-[10px] font-medium text-slate-500 sm:top-1.5 sm:left-1.5 sm:text-[11px] md:top-2 md:left-2 md:text-[12px]">
                       {d.getDate()}
                     </div>
-
-                    {/* Cash (responsive): xs bottom text; sm+ centered badge */}
                     {hasData ? (
                       <>
                         <div className="absolute inset-x-1 bottom-1 flex items-end justify-center sm:hidden">
