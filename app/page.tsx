@@ -2,11 +2,11 @@
 import CalendarPicker from '@/components/CalendarPicker';
 import DemoSignInButton from '@/components/DemoSignInButton';
 import HomeQuickActions from '@/components/HomeQuickActions';
+import TopNavBar from '@/components/TopNavBar';
 import { authOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import Link from 'next/link';
 import HomeHeader from './(home)/HomeHeader';
-import TopNavBar from '@/components/TopNavBar';
 
 function displayName(name?: string | null, email?: string | null) {
   const n = (name ?? '').trim();
@@ -112,8 +112,8 @@ export default async function HomePage() {
     <main className="space-y-6">
       {/* Mobile top bar (sticky) */}
       <TopNavBar />
-      {/* spacer for sticky height on xs */}
-      <div className="h-12 sm:hidden" />
+      {/* spacer for fixed height on xs */}
+      <div className="h-14 sm:hidden" />
 
       {/* Desktop/tablet header */}
       <div className="hidden sm:block">

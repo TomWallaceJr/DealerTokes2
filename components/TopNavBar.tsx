@@ -1,12 +1,11 @@
 // components/TopNavBar.tsx
 'use client';
 
-import type React from 'react';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
-import { useState } from 'react';
+import { useState, type SVGProps } from 'react';
 
-function IconBase(props: React.SVGProps<SVGSVGElement>) {
+function IconBase(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -21,7 +20,7 @@ function IconBase(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-function Plus(props: React.SVGProps<SVGSVGElement>) {
+function Plus(props: SVGProps<SVGSVGElement>) {
   return (
     <IconBase {...props}>
       <circle cx="12" cy="12" r="10" fill="currentColor" stroke="none" />
@@ -31,7 +30,7 @@ function Plus(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-function ListClock(props: React.SVGProps<SVGSVGElement>) {
+function ListClock(props: SVGProps<SVGSVGElement>) {
   return (
     <IconBase {...props}>
       <path d="M3 6h8" />
@@ -43,7 +42,7 @@ function ListClock(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-function Chart(props: React.SVGProps<SVGSVGElement>) {
+function Chart(props: SVGProps<SVGSVGElement>) {
   return (
     <IconBase {...props}>
       <path d="M3 3v18h18" />
@@ -52,7 +51,7 @@ function Chart(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-function Logout(props: React.SVGProps<SVGSVGElement>) {
+function Logout(props: SVGProps<SVGSVGElement>) {
   return (
     <IconBase {...props}>
       <path d="M10 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3" />
@@ -62,48 +61,69 @@ function Logout(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+function HomeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <IconBase {...props}>
+      <path d="M3 12l9-9 9 9" />
+      <path d="M5 10v10h14V10" />
+    </IconBase>
+  );
+}
+
 export default function TopNavBar() {
   const [signingOut, setSigningOut] = useState(false);
 
   return (
-    <nav className="sticky top-0 z-40 block w-full border-b border-emerald-200/60 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 sm:hidden">
-      <div className="w-full px-3">
-        <div className="flex h-12 items-center justify-between">
-          {/* Add Shift */}
-          <Link
-            href="/shifts/new"
-            className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-white shadow-md ring-1 ring-emerald-400/50 transition-transform focus:outline-none focus:ring-2 focus:ring-emerald-500 active:scale-[.98]"
-            aria-label="Add Shift"
-          >
-            <span className="relative inline-flex items-center justify-center rounded-full bg-emerald-500 p-1.5 shadow-[0_6px_18px_rgba(16,185,129,0.35)]">
-              <Plus width={28} height={28} />
-            </span>
-            <span className="text-[13px] text-emerald-700">Add</span>
-          </Link>
+    <>
+      {/* Floating Add button — popped out, exact top-left */}
+      <Link
+        href="/shifts/new"
+        className="fixed left-3 top-3 z-50 inline-flex items-center justify-center rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-500 active:scale-[.98] sm:hidden"
+        aria-label="Add Shift"
+        title="Add Shift"
+      >
+        <span className="inline-flex items-center justify-center rounded-full bg-emerald-500 p-2.5 text-emerald-500 shadow-[0_12px_28px_rgba(16,185,129,0.50)]">
+          <Plus width={36} height={36} />
+        </span>
+      </Link>
 
-          {/* Recent Shifts */}
-          <Link
-            href="/shifts"
-            className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-slate-700 hover:text-emerald-700"
-            aria-label="Recent Shifts"
+      <nav className="fixed inset-x-0 top-0 z-40 block w-full border-b border-emerald-200/60 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 sm:hidden">
+        <div className="w-full px-2">
+          <div className="flex h-14 items-center justify-around gap-1">
+            {/* placeholder to preserve spacing where Add button lives */}
+            <span className="inline-block w-12" aria-hidden="true" />
+            {/* Home */}
+            <Link
+              href="/"
+              className="inline-flex flex-col items-center gap-0.5 rounded-lg px-2 py-1 text-center text-slate-700 hover:text-emerald-700"
+              aria-label="Home"
+            >
+              <HomeIcon width={24} height={24} />
+              <span className="text-[11px] leading-none">Home</span>
+            </Link>
+            {/* Recent Shifts */}
+            <Link
+              href="/shifts"
+              className="inline-flex flex-col items-center gap-0.5 rounded-lg px-2 py-1 text-center text-slate-700 hover:text-emerald-700"
+              aria-label="Recent Shifts"
           >
-            <ListClock width={20} height={20} />
-            <span className="text-[13px]">Shifts</span>
+            <ListClock width={24} height={24} />
+            <span className="text-[11px] leading-none">Shifts</span>
           </Link>
 
           {/* View Stats */}
           <Link
             href="/stats"
-            className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-slate-700 hover:text-emerald-700"
+            className="inline-flex flex-col items-center gap-0.5 rounded-lg px-2 py-1 text-center text-slate-700 hover:text-emerald-700"
             aria-label="View Stats"
           >
-            <Chart width={20} height={20} />
-            <span className="text-[13px]">Stats</span>
+            <Chart width={24} height={24} />
+            <span className="text-[11px] leading-none">Stats</span>
           </Link>
 
           {/* Sign out */}
           <button
-            className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-slate-700 hover:text-emerald-700"
+            className="inline-flex flex-col items-center gap-0.5 rounded-lg px-2 py-1 text-center text-slate-700 hover:text-emerald-700"
             aria-label="Sign out"
             onClick={async () => {
               if (signingOut) return;
@@ -112,11 +132,12 @@ export default function TopNavBar() {
             }}
             disabled={signingOut}
           >
-            <Logout width={20} height={20} />
-            <span className="text-[13px]">Sign out</span>
+            <Logout width={24} height={24} />
+            <span className="text-[11px] leading-none">Sign out</span>
           </button>
+          </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+    </>
   );
 }

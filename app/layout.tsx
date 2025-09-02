@@ -20,7 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen antialiased">
         <Providers>
-          <header className="sticky top-0 z-40 border-b border-emerald-200/60 bg-white/60 backdrop-blur supports-[backdrop-filter]:bg-white/50">
+          <header className="sticky top-0 z-40 hidden border-b border-emerald-200/60 bg-white/60 backdrop-blur supports-[backdrop-filter]:bg-white/50 sm:block">
             <div className="mx-auto max-w-4xl px-4 py-3">
               <div className="flex items-center justify-between gap-3 sm:gap-4">
                 {/* Brand + Tagline */}

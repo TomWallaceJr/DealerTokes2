@@ -93,7 +93,7 @@ export default function HomeHeader({ userName }: { userName?: string | null }) {
   }).format(now);
 
   return (
-    <section className="card">
+    <section className="card hidden sm:block">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">
