@@ -2,10 +2,11 @@
 import CalendarPicker from '@/components/CalendarPicker';
 import DemoSignInButton from '@/components/DemoSignInButton';
 import HomeQuickActions from '@/components/HomeQuickActions';
+import Snapshot from '@/components/Snapshot';
+import { DEMO_EMAIL, DEMO_GREETING_NAMES } from '@/lib/appConfig';
 import { authOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import Link from 'next/link';
-import Snapshot from '@/components/Snapshot';
 
 function displayName(name?: string | null, email?: string | null) {
   const n = (name ?? '').trim();
@@ -16,7 +17,11 @@ function displayName(name?: string | null, email?: string | null) {
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
-  const userName = displayName(session?.user?.name, session?.user?.email);
+  const isDemo =
+    !!session?.user?.email && session.user.email.toLowerCase() === DEMO_EMAIL.toLowerCase();
+  const userName = isDemo
+    ? DEMO_GREETING_NAMES[Math.floor(Math.random() * DEMO_GREETING_NAMES.length)]
+    : displayName(session?.user?.name, session?.user?.email);
 
   if (!session) {
     // Public/marketing page
@@ -43,7 +48,7 @@ export default async function HomePage() {
               <Link href="/auth/signin" className="btn w-full sm:w-auto">
                 Sign In
               </Link>
-              <DemoSignInButton />
+              <DemoSignInButton className="w-full sm:w-auto"  />
             </div>
           </div>
         </section>
@@ -61,7 +66,7 @@ export default async function HomePage() {
                 />
               </svg>
             </div>
-            <h3 className="text-sm font-semibold text-slate-900">Log in seconds</h3>
+            <h3 className="text-sm font-semibold text-slate-900">Log data in seconds</h3>
             <p className="mt-1 text-sm text-slate-600">
               Date, room, hours, downs, and cash tokes—optimized for speed on mobile.
             </p>
@@ -100,7 +105,45 @@ export default async function HomePage() {
 
         {/* NOTE */}
         <section className="rounded-2xl border border-emerald-200/60 bg-white/70 p-4 text-sm text-slate-700 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
-          Prefer not to create an account yet? Use the demo—then sign up when you’re ready.
+          <div className="mb-2">
+            <DemoSignInButton
+              className="w-full px-4 py-3 text-base sm:w-auto"
+              
+            >
+              Try Demo
+            </DemoSignInButton>
+          </div>
+          Prefer not to create an account yet? Test drive the demo—then sign up when you’re ready.
+        </section>
+
+        {/* EARLY DEVELOPMENT NOTICE */}
+        <section
+          role="note"
+          aria-label="Early development notice"
+          className="rounded-2xl border border-amber-200/70 bg-amber-50/80 p-3 text-[12px] text-amber-800 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-amber-50/70 sm:text-sm"
+          style={{ marginBottom: 'max(env(safe-area-inset-bottom), 10px)' }}
+        >
+          <div className="flex items-start gap-2">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 sm:h-5 sm:w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+              <path d="M12 9v4" />
+              <path d="M12 17h.01" />
+            </svg>
+            <p>
+              This application is in early development. Features may change and some areas may be
+              incomplete or unstable. We appreciate your feedback as we iterate.
+            </p>
+          </div>
         </section>
       </main>
     );
@@ -127,6 +170,35 @@ export default async function HomePage() {
           {/* HomeQuickActions already lays out horizontally on sm+ via its grid classes,
               and vertically (one-per-row) on xs by default. */}
           <HomeQuickActions />
+        </div>
+      </section>
+
+      {/* EARLY DEVELOPMENT NOTICE */}
+      <section
+        role="note"
+        aria-label="Early development notice"
+        className="rounded-2xl border border-amber-200/70 bg-amber-50/80 p-3 text-[12px] text-amber-800 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-amber-50/70 sm:text-sm"
+      >
+        <div className="flex items-start gap-2">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 sm:h-5 sm:w-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+            <path d="M12 9v4" />
+            <path d="M12 17h.01" />
+          </svg>
+          <p>
+            This application is in early development. Features may change and some areas may be
+            incomplete or unstable. We appreciate your feedback as we iterate.
+          </p>
         </div>
       </section>
     </main>

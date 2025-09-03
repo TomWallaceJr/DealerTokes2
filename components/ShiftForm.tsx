@@ -6,6 +6,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { money, num } from '@/lib/format';
 
 type NewShift = {
   date: string; // YYYY-MM-DD
@@ -16,20 +17,6 @@ type NewShift = {
   notes?: string | null;
 };
 
-// ---- format helpers
-function money(n: number, digits = 0) {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: digits,
-  }).format(n ?? 0);
-}
-function num(n: number, digits = 2) {
-  return new Intl.NumberFormat(undefined, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(n ?? 0);
-}
 function parseLocalYmd(ymd: string) {
   const [y, m, d] = ymd.split('-').map((x) => parseInt(x, 10));
   return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);

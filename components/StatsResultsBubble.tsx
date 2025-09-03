@@ -2,26 +2,7 @@
 'use client';
 
 import React from 'react';
-
-function money(n: number, digits = 0) {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: digits,
-  }).format(n ?? 0);
-}
-function num(n: number, digits = 2) {
-  return new Intl.NumberFormat(undefined, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(n ?? 0);
-}
-function compact(n: number, digits = 1) {
-  return new Intl.NumberFormat(undefined, {
-    notation: 'compact',
-    maximumFractionDigits: digits,
-  }).format(n ?? 0);
-}
+import { money, num } from '@/lib/format';
 
 export type StatsResultsBubbleProps = {
   label: React.ReactNode;
@@ -75,7 +56,7 @@ export default function StatsResultsBubble({
             {showCount ? (
               <>
                 <span className="text-slate-400">•</span>
-                <span className="text-slate-500">{compact(count)} shifts</span>
+                <span className="text-slate-500">{count} shifts</span>
               </>
             ) : null}
           </div>

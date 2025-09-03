@@ -351,19 +351,25 @@ export default function StatsPage() {
 
   return (
     <main className="space-y-4">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Detailed Income Analysis</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Track your income performance and drill into recent shifts.
-        </p>
-      </div>
+      {/* Title card with Back (hidden on mobile) */}
+      <section className="card relative">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">Detailed Income Analysis</h1>
+            <p className="mt-0.5 text-xs text-slate-600 sm:text-sm">
+              Track your income performance and drill into recent shifts.
+            </p>
+          </div>
+          <div className="hidden sm:block">
+            <BackButton title="Back" aria-label="Go back" />
+          </div>
+        </div>
+      </section>
 
       {/* Quick Filters */}
       <div className="card">
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="text-sm font-medium text-slate-900">Quick Filters</div>
-          <BackButton />
         </div>
 
         <div className="flex flex-wrap gap-2">

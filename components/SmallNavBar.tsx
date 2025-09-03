@@ -81,12 +81,12 @@ export default function SmallNavBar() {
       {/* Floating Add button — popped out, exact top-left */}
       <Link
         href="/shifts/new"
-        className="fixed left-3 z-50 inline-flex items-center justify-center rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-500 active:scale-[.98] sm:hidden"
+        className="fixed left-3 z-50 inline-flex items-center justify-center rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-600 active:scale-[.98] sm:hidden"
         aria-label="Add Shift"
         title="Add Shift"
         style={{ top: 'max(env(safe-area-inset-top), 0.75rem)' }}
       >
-        <span className="inline-flex items-center justify-center rounded-full bg-emerald-500 p-2.5 text-emerald-500 shadow-[0_12px_28px_rgba(16,185,129,0.50)]">
+        <span className="inline-flex items-center justify-center rounded-full bg-emerald-600 p-2.5 text-emerald-600 shadow-[0_12px_28px_rgba(5,150,105,0.50)]">
           <Plus width={36} height={36} />
         </span>
       </Link>
@@ -106,12 +106,7 @@ export default function SmallNavBar() {
             >
               <HomeIcon width={24} height={24} />
               <span className="text-[11px] leading-none">Home</span>
-              <span
-                className={`mt-0.5 h-0.5 w-4 rounded-full ${
-                  isActive('/') ? 'bg-emerald-500' : 'bg-transparent'
-                }`}
-                aria-hidden
-              />
+              <span className={`mt-0.5 h-0.5 w-4 rounded-full ${isActive('/') ? 'bg-emerald-600' : 'bg-transparent'}`} aria-hidden />
             </Link>
             {/* Recent Shifts */}
             <Link
@@ -123,12 +118,7 @@ export default function SmallNavBar() {
             >
               <ListClock width={24} height={24} />
               <span className="text-[11px] leading-none">Shifts</span>
-              <span
-                className={`mt-0.5 h-0.5 w-4 rounded-full ${
-                  isActive('/shifts') ? 'bg-emerald-500' : 'bg-transparent'
-                }`}
-                aria-hidden
-              />
+              <span className={`mt-0.5 h-0.5 w-4 rounded-full ${isActive('/shifts') ? 'bg-emerald-600' : 'bg-transparent'}`} aria-hidden />
             </Link>
 
             {/* View Stats */}
@@ -141,12 +131,7 @@ export default function SmallNavBar() {
             >
               <Chart width={24} height={24} />
               <span className="text-[11px] leading-none">Stats</span>
-              <span
-                className={`mt-0.5 h-0.5 w-4 rounded-full ${
-                  isActive('/stats') ? 'bg-emerald-500' : 'bg-transparent'
-                }`}
-                aria-hidden
-              />
+              <span className={`mt-0.5 h-0.5 w-4 rounded-full ${isActive('/stats') ? 'bg-emerald-600' : 'bg-transparent'}`} aria-hidden />
             </Link>
 
             {/* Sign out */}

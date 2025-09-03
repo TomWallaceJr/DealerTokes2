@@ -86,11 +86,11 @@ export default function LargeNavBar() {
             {/* Log a Shift — emerald pill with white + on left */}
             <Link
               href="/shifts/new"
-              className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-3.5 py-2 text-white shadow-[0_10px_24px_rgba(16,185,129,0.45)] transition-colors hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3.5 py-2 text-white shadow-[0_10px_24px_rgba(5,150,105,0.45)] transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-600"
               aria-label="Log a Shift"
               title="Log a Shift"
             >
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600">
                 {/* white plus */}
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 5v14" />
@@ -113,7 +113,7 @@ export default function LargeNavBar() {
                   <HomeIcon width={28} height={28} />
                 </span>
                 <span className="leading-none">Home</span>
-                <span className={`mt-0.5 h-0.5 w-5 rounded-full ${isActive('/') ? 'bg-emerald-500' : 'bg-transparent'}`} aria-hidden />
+                <span className={`mt-0.5 h-0.5 w-5 rounded-full ${isActive('/') ? 'bg-emerald-600' : 'bg-transparent'}`} aria-hidden />
               </Link>
               <Link
                 href="/shifts"
@@ -126,7 +126,7 @@ export default function LargeNavBar() {
                   <ListClock width={28} height={28} />
                 </span>
                 <span className="leading-none">Shifts</span>
-                <span className={`mt-0.5 h-0.5 w-5 rounded-full ${isActive('/shifts') ? 'bg-emerald-500' : 'bg-transparent'}`} aria-hidden />
+                <span className={`mt-0.5 h-0.5 w-5 rounded-full ${isActive('/shifts') ? 'bg-emerald-600' : 'bg-transparent'}`} aria-hidden />
               </Link>
               <Link
                 href="/stats"
@@ -139,7 +139,7 @@ export default function LargeNavBar() {
                   <Chart width={28} height={28} />
                 </span>
                 <span className="leading-none">Stats</span>
-                <span className={`mt-0.5 h-0.5 w-5 rounded-full ${isActive('/stats') ? 'bg-emerald-500' : 'bg-transparent'}`} aria-hidden />
+                <span className={`mt-0.5 h-0.5 w-5 rounded-full ${isActive('/stats') ? 'bg-emerald-600' : 'bg-transparent'}`} aria-hidden />
               </Link>
             </nav>
 

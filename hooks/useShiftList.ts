@@ -1,4 +1,6 @@
 // hooks/useShiftList.ts
+// Purpose: Encapsulate paginated shift fetching, deletion, and state (loading/error)
+// Usage: const { items, refresh, loadMore, remove, ... } = useShiftList()
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
@@ -23,6 +25,11 @@ type PageResp = {
 
 const PAGE_SIZE = 20;
 
+/**
+ * Normalizes API responses that may be either
+ * - { items, total, hasMore, limit, offset } or
+ * - an array of shift rows
+ */
 function normalize(json: any): PageResp {
   if (json && Array.isArray(json.items)) {
     return {
@@ -39,6 +46,10 @@ function normalize(json: any): PageResp {
   return { items: [], total: 0, hasMore: false, limit: PAGE_SIZE, offset: 0 };
 }
 
+/**
+ * Provides a paginated list of shifts with helpers to refresh, load more,
+ * and delete a shift. Safe defaults ensure consumers can render immediately.
+ */
 export function useShiftList() {
   const [items, setItems] = useState<Shift[]>();
   const [offset, setOffset] = useState(0);

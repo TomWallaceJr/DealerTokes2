@@ -2,6 +2,7 @@
 'use client';
 
 import BackButton from '@/components/BackButton';
+import { money, num } from '@/lib/format';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -15,26 +16,6 @@ type ShiftForEdit = {
   notes: string;
 };
 
-// ---------- format helpers ----------
-function money(n: number, digits = 0) {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: digits,
-  }).format(n ?? 0);
-}
-function num(n: number, digits = 2) {
-  return new Intl.NumberFormat(undefined, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(n ?? 0);
-}
-function compact(n: number, digits = 1) {
-  return new Intl.NumberFormat(undefined, {
-    notation: 'compact',
-    maximumFractionDigits: digits,
-  }).format(n ?? 0);
-}
 function parseLocalYmd(ymd: string) {
   const [y, m, d] = ymd.split('-').map((x) => parseInt(x, 10));
   return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
@@ -171,7 +152,7 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
   const shiftCount = 1; // editing a single shift
 
   return (
-    <div className="card relative mt-3 space-y-4 sm:mt-0">
+    <div className="card relative space-y-4">
       {/* Header row (at top) */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

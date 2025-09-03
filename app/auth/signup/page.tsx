@@ -108,7 +108,7 @@ export default function SignUpPage() {
 
         <form onSubmit={onSubmit} className="space-y-3">
           <div>
-            <label className="text-xs text-slate-600">Name</label>
+            <label className="text-xs text-slate-600">First Name</label>
             <input
               className="input mt-1"
               type="text"

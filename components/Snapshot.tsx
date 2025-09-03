@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { money, num } from '@/lib/format';
 
 type Summary = {
   total: number;
@@ -11,21 +12,6 @@ type Summary = {
   perDown: number;
   count: number;
 };
-
-function money(n: number, digits = 0) {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: digits,
-  }).format(n);
-}
-
-function num(n: number, digits = 2) {
-  return new Intl.NumberFormat(undefined, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(n);
-}
 
 function pad(n: number) {
   return String(n).padStart(2, '0');
@@ -49,7 +35,7 @@ function nextMondayOf(date: Date) {
 
 export default function Snapshot({ userName }: { userName?: string | null }) {
   const now = useMemo(() => new Date(), []);
-  const firstName = (userName ?? '').split(/\s+/)[0] || 'there';
+  const greet = (userName ?? '').trim() || 'there';
 
   const [week, setWeek] = useState<Summary | null>(null);
   const [month, setMonth] = useState<Summary | null>(null);
@@ -114,7 +100,7 @@ export default function Snapshot({ userName }: { userName?: string | null }) {
   }).format(now);
 
   return (
-    <div className="card mt-3 sm:mt-0">
+    <div className="card">
       {/* Header row: hide toggle immediately left of greeting */}
       <div className="mb-2 flex items-center gap-2">
         {hidden ? (
@@ -168,7 +154,7 @@ export default function Snapshot({ userName }: { userName?: string | null }) {
               </svg>
             </button>
             <div className="min-w-0">
-              <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">Hello, {firstName}</h1>
+              <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">Hello, {greet}</h1>
               <p className="mt-0.5 text-xs text-slate-600">{dayStr}</p>
             </div>
           </>

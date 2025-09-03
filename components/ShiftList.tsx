@@ -14,7 +14,7 @@ export default function ShiftList() {
   const { items, hasMore, loading, loadingMore, error, refresh, loadMore } = useShiftList();
 
   return (
-    <div className="card mt-3 sm:mt-0">
+    <div className="card">
       {/* Top bar */}
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
