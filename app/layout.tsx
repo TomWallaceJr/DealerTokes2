@@ -1,6 +1,7 @@
 // app/layout.tsx
 import type { Metadata } from 'next';
 import './globals.css';
+import Script from 'next/script';
 
 import BottomNav from '@/components/BottomNav';
 import LargeNavBar from '@/components/LargeNavBar';
@@ -20,6 +21,28 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen antialiased">
         <Providers>
+          {/* Sentry (client) via CDN — initialized only if DSN is provided */}
+          {process.env.NEXT_PUBLIC_SENTRY_DSN ? (
+            <>
+              <Script
+                src="https://browser.sentry-cdn.com/7.114.0/bundle.tracing.min.js"
+                strategy="afterInteractive"
+                crossOrigin="anonymous"
+              />
+              <Script id="sentry-init" strategy="afterInteractive">
+                {`
+                  if (window.Sentry) {
+                    window.Sentry.init({
+                      dsn: '${process.env.NEXT_PUBLIC_SENTRY_DSN}',
+                      tracesSampleRate: 0.1,
+                      environment: '${process.env.NODE_ENV}',
+                    });
+                  }
+                `}
+              </Script>
+            </>
+          ) : null}
+
           {/* Responsive navbars */}
           <div className="hidden sm:block">
             <LargeNavBar />
