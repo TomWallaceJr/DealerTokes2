@@ -171,57 +171,84 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
   const shiftCount = 1; // editing a single shift
 
   return (
-    <div className="card relative space-y-4">
-      {/* Back — restored to upper-right, with breathing room */}
-      <BackButton
-        className="absolute top-3 right-3 z-10 h-9 w-9 justify-center gap-0 px-0 sm:top-4 sm:right-4 sm:h-auto sm:w-auto sm:gap-2 sm:px-3.5"
-        title="Back"
-        aria-label="Go back"
-      />
-
-      {/* Results bubble (refined) */}
-      <div className="m-5 mt-11 rounded-2xl border border-emerald-300/70 bg-gradient-to-br from-emerald-50 to-teal-50 p-4 shadow-sm">
-        {error ? (
-          <span className="text-rose-600">{error}</span>
-        ) : (
-          <>
-            {/* Mobile: two rows, compact without shift count */}
-            <div className="flex flex-col gap-1 sm:hidden">
-              <div className="flex items-center gap-3">
-                <span className="text-[13px] text-slate-600">{resultsLabel}</span>
-                <span className="text-slate-400">•</span>
-                <span className="text-[15px] font-semibold text-slate-900">{money(total)}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="font-medium text-slate-800">${num(hourly)} / h</span>
-                <span className="text-slate-400">•</span>
-                <span className="font-medium text-slate-800">${num(pDown)} / down</span>
-              </div>
-            </div>
-
-            {/* Desktop: one clean line with separators + shift count */}
-            <div className="hidden flex-wrap items-center gap-x-4 sm:flex">
-              <span className="text-slate-600">{resultsLabel}</span>
-              <span className="font-semibold text-slate-900">{money(total)}</span>
-              <span className="text-slate-400">•</span>
-              <span className="font-medium text-slate-800">${num(hourly)} / h</span>
-              <span className="text-slate-400">•</span>
-              <span className="font-medium text-slate-800">${num(pDown)} / down</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Header row */}
+    <div className="card relative mt-3 space-y-4 sm:mt-0">
+      {/* Header row (at top) */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-slate-900">Edit Shift</h2>
-          <p className="mt-0.5 text-xs text-slate-600">
-            Update hours, downs, and cashout. Changes apply immediately.
-          </p>
+          <p className="mt-0.5 text-xs text-slate-600">Changes apply immediately.</p>
         </div>
-        {/* (BackButton is already positioned absolutely) */}
-        <span className="hidden sm:block" />
+        {/* Right-side: on mobile show delete icon; on desktop show Back */}
+        <div className="shrink-0">
+          {/* Mobile: small delete icon in header */}
+          <button
+            type="button"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-rose-600 ring-1 ring-rose-200/70 transition hover:bg-rose-50 focus:ring-2 focus:ring-rose-500 focus:outline-none sm:hidden"
+            title="Delete"
+            aria-label="Delete shift"
+            onClick={remove}
+            disabled={deleting || saving}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 6h18" />
+              <path d="M8 6v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
+
+          {/* Desktop: Back button on same line, right aligned */}
+          <div className="hidden sm:block">
+            <BackButton title="Back" aria-label="Go back" />
+          </div>
+        </div>
+      </div>
+
+      {/* Results bubble — 4-line, consistent layout */}
+      <div className="m-3 mt-0 rounded-2xl border border-emerald-300/70 bg-gradient-to-br from-emerald-50 to-teal-50 p-3 shadow-sm sm:m-5 sm:p-4">
+        {error ? (
+          <span className="text-rose-600">{error}</span>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {/* line 1: Date • Casino */}
+            <div className="flex items-center gap-2 text-[13px] text-slate-800 sm:text-sm">
+              <span className="truncate">{dayLabel}</span>
+              <span className="text-slate-300">•</span>
+              <span className="truncate">{casino || 'Room'}</span>
+            </div>
+
+            {/* line 2: Total cash • $/h */}
+            <div className="flex items-center gap-2 text-[13px] text-slate-800 sm:text-sm">
+              <span>{money(total)}</span>
+              <span className="text-slate-300">•</span>
+              <span>${num(hourly)} / h</span>
+            </div>
+
+            {/* line 3: Total downs • $/d */}
+            <div className="flex items-center gap-2 text-[13px] text-slate-800 sm:text-sm">
+              <span>{num(downs)} downs</span>
+              <span className="text-slate-300">•</span>
+              <span>${num(pDown)} / d</span>
+            </div>
+
+            {/* line 4: Notes */}
+            {notes?.trim() ? (
+              <div className="text-[13px] text-slate-800 sm:text-sm">{notes}</div>
+            ) : null}
+          </div>
+        )}
       </div>
 
       {/* Date + Casino */}
@@ -325,32 +352,29 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
         />
       </div>
 
-      {/* Footer: KPIs + actions */}
-      <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-slate-600">
-          Total: {money(tokesCash, 0)} • $/h: {num(perHour)} • $/down: {num(perDown)}
+      {/* Footer actions only: Save/Cancel left, Delete right (hidden on mobile) */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-2">
+          <button className="btn btn-primary" onClick={save} disabled={saving}>
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => router.push('/shifts')}
+            disabled={saving || deleting}
+          >
+            Cancel
+          </button>
         </div>
 
-        <div className="flex w-full flex-col gap-2 sm:w-auto">
-          <div className="flex flex-wrap gap-2">
-            <button className="btn btn-primary" onClick={save} disabled={saving}>
-              {saving ? 'Saving…' : 'Save Changes'}
-            </button>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => router.push('/shifts')}
-              disabled={saving || deleting}
-            >
-              Cancel
-            </button>
-            <button className="btn btn-danger" onClick={remove} disabled={deleting || saving}>
-              {deleting ? 'Deleting…' : 'Delete'}
-            </button>
-          </div>
-
-          {error && <div className="text-xs text-rose-600">{error}</div>}
+        <div className="hidden items-center gap-2 sm:flex">
+          <button className="btn btn-danger" onClick={remove} disabled={deleting || saving}>
+            {deleting ? 'Deleting…' : 'Delete'}
+          </button>
         </div>
+
+        {error && <div className="text-xs text-rose-600">{error}</div>}
       </div>
     </div>
   );
