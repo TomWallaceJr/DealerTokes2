@@ -26,9 +26,10 @@ function startOfISOWeekUTC(d: Date) {
 }
 
 async function main() {
-  const email = 'example@example.com';
-  const name = 'Jon Doe';
-  const passwordHash = await bcrypt.hash('Demo123!', 12);
+  const email = process.env.NEXT_PUBLIC_DEMO_EMAIL ?? 'example@example.com';
+  const name = 'Demo User';
+  const passwordRaw = process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? 'Demo123!';
+  const passwordHash = await bcrypt.hash(passwordRaw, 12);
 
   const user = await prisma.user.upsert({
     where: { email },
@@ -40,7 +41,8 @@ async function main() {
   await prisma.shift.deleteMany({ where: { userId: user.id } });
 
   const todayUTC = utcMidnight(new Date());
-  const startUTC = addDaysUTC(todayUTC, -365 * 2);
+  // Seed last 10 years for richer demo data
+  const startUTC = addDaysUTC(todayUTC, -365 * 10);
 
   const ROOMS = ['Wind Creek', 'Mohegan'];
   const createdAt = new Date();

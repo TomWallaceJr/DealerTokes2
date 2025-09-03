@@ -33,6 +33,41 @@ npm run dev
 
 App runs at http://localhost:3000
 
+## Deployment
+
+Environment variables (set in your hosting platform):
+
+- `DATABASE_URL`: PostgreSQL connection string
+- `NEXTAUTH_URL`: Public site URL (e.g. https://your-domain.com)
+- `NEXTAUTH_SECRET`: Strong random secret (generate with `openssl rand -hex 32`)
+- `NEXT_PUBLIC_APP_NAME`: Branding name (e.g. DownCount)
+- `NEXT_PUBLIC_DEMO_EMAIL`: Demo account email for the Try Demo button
+- `NEXT_PUBLIC_DEMO_PASSWORD`: Demo account password
+- `NEXT_PUBLIC_SENTRY_DSN` (optional): Sentry Browser DSN for client errors
+
+Database + Prisma:
+
+```bash
+# run once per environment
+npx prisma migrate deploy
+
+# (optional) seed demo data — creates/updates demo user and generates shifts
+npm run seed
+```
+
+Build & run:
+
+```bash
+npm run build
+npm run start
+```
+
+Health check:
+
+```
+GET /api/health  -> { "status": "ok", "time": "..." }
+```
+
 ## GitHub Repo (init & first push)
 
 ```bash
