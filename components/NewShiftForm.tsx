@@ -15,6 +15,9 @@ type NewShift = {
   downs: number; // quarter increments
   tokesCash: number; // whole dollars
   notes?: string | null;
+  tournamentDowns?: number;
+  tournamentRate?: number;
+  hourlyRate?: number;
 };
 
 function parseLocalYmd(ymd: string) {
@@ -126,6 +129,13 @@ export default function NewShiftForm({ initialDate }: { initialDate?: string }) 
         tokesCash, // whole dollars
         notes: notes ? notes : undefined,
       };
+      if (includeTourney) {
+        body.tournamentDowns = Math.max(0, parseNum(tourneyDownsStr));
+        body.tournamentRate = Math.max(0, parseNum(tourneyRateStr));
+      }
+      if (includeHourly) {
+        body.hourlyRate = Math.max(0, parseNum(hourlyRateStr));
+      }
 
       const res = await fetch('/api/shifts', {
         method: 'POST',

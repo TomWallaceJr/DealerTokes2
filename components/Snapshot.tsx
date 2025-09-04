@@ -5,7 +5,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { money, num } from '@/lib/format';
 
 type Summary = {
-  total: number;
+  total: number; // cash tokes
+  tournamentTotal?: number; // derived on server: tournamentDowns * tournamentRate
+  wageTotal?: number; // derived on server: sum(hours * hourlyRate)
   hours: number;
   downs: number;
   hourly: number;
@@ -238,7 +240,10 @@ function SnapshotCard({ label, loading, s, includeCash, includeHourly, includeTo
       ) : s ? (
         (() => {
           const hours = s.hours || 0;
-          const total = (includeCash ? s.total : 0) + (includeHourly ? hourlyRate * hours : 0);
+          const total =
+            (includeCash ? s.total : 0) +
+            (includeHourly ? (s as any).wageTotal ?? 0 : 0) +
+            (includeTourney ? (s.tournamentTotal ?? 0) : 0);
           const perHour = hours > 0 ? total / hours : 0;
           return (
             <div className="mt-0.5 text-sm">
@@ -264,7 +269,10 @@ function Pill({ label, loading, s, includeCash, includeHourly, includeTourney, h
       ) : s ? (
         (() => {
           const hours = s.hours || 0;
-          const total = (includeCash ? s.total : 0) + (includeHourly ? hourlyRate * hours : 0);
+          const total =
+            (includeCash ? s.total : 0) +
+            (includeHourly ? (s as any).wageTotal ?? 0 : 0) +
+            (includeTourney ? (s.tournamentTotal ?? 0) : 0);
           const perHour = hours > 0 ? total / hours : 0;
           return (
             <div className="ml-2 truncate text-sm text-slate-800">

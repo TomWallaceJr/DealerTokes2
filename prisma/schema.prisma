@@ -29,8 +29,14 @@ model Shift {
   casino    String
 
   hours     Float               // quarter increments (.25)
+  hourlyRate Float   @default(0)
   tokesCash Int      @default(0)
+  jackpotTips Int    @default(0)
   downs     Float    @default(0) // quarter increments (.25)
+
+  // Tournament metrics (optional)
+  tournamentDowns Float   @default(0)
+  tournamentRate  Float   @default(0) // $ per tournament down
 
   notes     String?
   createdAt DateTime @default(now())

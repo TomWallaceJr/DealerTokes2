@@ -65,32 +65,48 @@ export async function GET(req: NextRequest) {
 
     const rows = await prisma.shift.findMany({
       where,
-      select: { date: true, hours: true, downs: true, tokesCash: true },
+      select: {
+        date: true,
+        hours: true,
+        hourlyRate: true,
+        downs: true,
+        tokesCash: true,
+        tournamentDowns: true,
+        tournamentRate: true,
+      },
     });
     const filtered = dows.length
       ? rows.filter((r) => dows.includes((r.date as Date).getUTCDay()))
       : rows;
 
     let total = 0,
+      tournamentTotal = 0,
       hours = 0,
       downs = 0,
+      wageTotal = 0,
       count = 0;
     for (const r of filtered) {
       const cash = r.tokesCash ?? 0;
       const h = Number(r.hours ?? 0) || 0;
+      const hr = Number(r.hourlyRate ?? 0) || 0;
       const d = Number(r.downs ?? 0) || 0;
       const effectiveHours = h > 0 ? h : d * 0.5; // 1 down = 0.5 hours
+      const tDowns = Number(r.tournamentDowns ?? 0) || 0;
+      const tRate = Number(r.tournamentRate ?? 0) || 0;
+      const tCash = Math.max(0, tDowns * tRate);
 
       total += cash;
+      tournamentTotal += tCash;
       hours += effectiveHours;
       downs += d;
+      wageTotal += h * hr;
       count += 1;
     }
     const hourly = hours > 0 ? total / hours : 0;
     const perDown = downs > 0 ? total / downs : 0;
 
-    return NextResponse.json({ total, hours, downs, hourly, perDown, count });
+    return NextResponse.json({ total, tournamentTotal, wageTotal, hours, downs, hourly, perDown, count });
   } catch {
-    return NextResponse.json({ total: 0, hours: 0, downs: 0, hourly: 0, perDown: 0, count: 0 });
+    return NextResponse.json({ total: 0, tournamentTotal: 0, wageTotal: 0, hours: 0, downs: 0, hourly: 0, perDown: 0, count: 0 });
   }
 }

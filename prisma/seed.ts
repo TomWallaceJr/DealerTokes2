@@ -50,6 +50,10 @@ async function main() {
   // ✅ Type batch explicitly for Prisma v6
   const batch: Prisma.ShiftCreateManyInput[] = [];
 
+  // Hourly rate periods within the 10-year range
+  const p1End = addDaysUTC(startUTC, 365 * 3); // first 3 years
+  const p2End = addDaysUTC(p1End, 365 * 3); // next 3 years
+
   for (let cursor = startUTC; cursor <= todayUTC; ) {
     const weekStart = startOfISOWeekUTC(cursor);
     const weekDays: Date[] = Array.from({ length: 7 }, (_, i) => addDaysUTC(weekStart, i));
@@ -64,14 +68,17 @@ async function main() {
       const downs = Math.max(0, Math.round(hoursQ * 2));
       const tokesCash = randInt(10, 500); // whole dollars
       const casino = ROOMS[randInt(0, ROOMS.length - 1)];
+      const hourlyRate = dayUTC < p1End ? 8.75 : dayUTC < p2End ? 9.0 : 9.25;
 
       batch.push({
         userId: user.id,
         date: dayUTC,
         casino,
         hours: hoursQ,
+        hourlyRate,
         tokesCash,
         downs,
+        jackpotTips: 0,
         notes: null,
         createdAt,
         updatedAt: createdAt,
@@ -80,6 +87,39 @@ async function main() {
 
     cursor = addDaysUTC(weekStart, 7);
   }
+
+  // Inject 4 jackpot tips: one big ($5,600) sometime last month, and three random $1,000–$3,000
+  try {
+    const now = new Date();
+    const lastMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+    const lastMonthIdx = batch
+      .map((b, idx) => ({ idx, date: b.date as Date }))
+      .filter((x) => x.date >= lastMonthStart && x.date < thisMonthStart)
+      .map((x) => x.idx);
+
+    if (lastMonthIdx.length) {
+      const i = lastMonthIdx[randInt(0, lastMonthIdx.length - 1)];
+      batch[i].jackpotTips = 5600;
+    }
+
+    // three more random jackpots (avoid reusing the last-month pick if any)
+    const used = new Set<number>();
+    batch.forEach((b, i) => {
+      if (b.jackpotTips && b.jackpotTips > 0) used.add(i);
+    });
+    const needed = 3;
+    let attempts = 0;
+    while (used.size < (lastMonthIdx.length ? 1 : 0) + needed && attempts < batch.length * 2) {
+      const i = randInt(0, batch.length - 1);
+      if (!used.has(i)) {
+        used.add(i);
+        batch[i].jackpotTips = randInt(1000, 3000);
+      }
+      attempts++;
+    }
+  } catch {}
 
   // Insert in chunks
   const chunk = 500;
@@ -90,7 +130,8 @@ async function main() {
     });
   }
 
-  console.log(`Seeded ${batch.length} hours-only shifts for ${name} <${email}>.`);
+  const jackpots = batch.filter((b) => (b as any).jackpotTips && (b as any).jackpotTips! > 0).length;
+  console.log(`Seeded ${batch.length} shifts (${jackpots} jackpots) for ${name} <${email}>.`);
 }
 
 main()
