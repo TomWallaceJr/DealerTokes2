@@ -33,6 +33,18 @@ npm run dev
 
 App runs at http://localhost:3000
 
+### Clean caches fast
+
+```bash
+# Remove .next and TS build info
+npm run clean
+
+# Deeper cleanup (also removes node_modules and lockfile)
+npm run clean:deep
+npm install
+```
+
+
 ## Deployment
 
 Environment variables (set in your hosting platform):
