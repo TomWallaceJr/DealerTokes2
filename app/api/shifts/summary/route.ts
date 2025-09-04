@@ -76,9 +76,14 @@ export async function GET(req: NextRequest) {
       downs = 0,
       count = 0;
     for (const r of filtered) {
-      total += r.tokesCash ?? 0;
-      hours += r.hours ?? 0;
-      downs += r.downs ?? 0;
+      const cash = r.tokesCash ?? 0;
+      const h = Number(r.hours ?? 0) || 0;
+      const d = Number(r.downs ?? 0) || 0;
+      const effectiveHours = h > 0 ? h : d * 0.5; // 1 down = 0.5 hours
+
+      total += cash;
+      hours += effectiveHours;
+      downs += d;
       count += 1;
     }
     const hourly = hours > 0 ? total / hours : 0;

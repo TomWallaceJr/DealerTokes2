@@ -43,6 +43,12 @@ export default function Snapshot({ userName }: { userName?: string | null }) {
   const [loading, setLoading] = useState(true);
   const [hidden, setHidden] = useState(false);
 
+  // Filters: which metrics to display in results
+  const [includeCash, setIncludeCash] = useState<boolean>(true);
+  const [includeHourly, setIncludeHourly] = useState<boolean>(true);
+  const [includeTourney, setIncludeTourney] = useState<boolean>(false);
+  const [hourlyRate, setHourlyRate] = useState<number>(0);
+
   // persist hidden state (match Hideable storage key semantics)
   const storageKey = 'hide:snapshot';
   useEffect(() => {
@@ -92,6 +98,15 @@ export default function Snapshot({ userName }: { userName?: string | null }) {
       }
     })();
   }, [now]);
+
+  // Load last known hourly rate (from NewShiftForm usage) to optionally include in totals
+  useEffect(() => {
+    try {
+      const lastHr = localStorage.getItem('lastHourlyRate');
+      const n = Number(lastHr);
+      if (Number.isFinite(n) && n > 0) setHourlyRate(n);
+    } catch {}
+  }, []);
 
   const dayStr = new Intl.DateTimeFormat(undefined, {
     weekday: 'long',
@@ -164,18 +179,49 @@ export default function Snapshot({ userName }: { userName?: string | null }) {
       {/* Content */}
       {!hidden && (
         <>
+          {/* Metric toggles */}
+          <div className="mb-2 flex flex-wrap items-center gap-4">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                checked={includeCash}
+                onChange={(e) => setIncludeCash(e.target.checked)}
+              />
+              Cash
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                checked={includeHourly}
+                onChange={(e) => setIncludeHourly(e.target.checked)}
+              />
+              Hourly
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                checked={includeTourney}
+                onChange={(e) => setIncludeTourney(e.target.checked)}
+              />
+              Tournaments
+            </label>
+          </div>
+
           {/* Mobile: vertical pills with one-line stats */}
           <div className="space-y-2 sm:hidden">
-            <Pill label="This Week" loading={loading} s={week} />
-            <Pill label="This Month" loading={loading} s={month} />
-            <Pill label="YTD" loading={loading} s={ytd} />
+            <Pill label="This Week" loading={loading} s={week} includeCash={includeCash} includeHourly={includeHourly} includeTourney={includeTourney} hourlyRate={hourlyRate} />
+            <Pill label="This Month" loading={loading} s={month} includeCash={includeCash} includeHourly={includeHourly} includeTourney={includeTourney} hourlyRate={hourlyRate} />
+            <Pill label="YTD" loading={loading} s={ytd} includeCash={includeCash} includeHourly={includeHourly} includeTourney={includeTourney} hourlyRate={hourlyRate} />
           </div>
 
           {/* Desktop: three cards */}
           <div className="mt-2 hidden gap-2 sm:grid sm:grid-cols-3">
-            <SnapshotCard label="This Week" loading={loading} s={week} />
-            <SnapshotCard label="This Month" loading={loading} s={month} />
-            <SnapshotCard label="YTD" loading={loading} s={ytd} />
+            <SnapshotCard label="This Week" loading={loading} s={week} includeCash={includeCash} includeHourly={includeHourly} includeTourney={includeTourney} hourlyRate={hourlyRate} />
+            <SnapshotCard label="This Month" loading={loading} s={month} includeCash={includeCash} includeHourly={includeHourly} includeTourney={includeTourney} hourlyRate={hourlyRate} />
+            <SnapshotCard label="YTD" loading={loading} s={ytd} includeCash={includeCash} includeHourly={includeHourly} includeTourney={includeTourney} hourlyRate={hourlyRate} />
           </div>
         </>
       )}
@@ -183,17 +229,25 @@ export default function Snapshot({ userName }: { userName?: string | null }) {
   );
 }
 
-function SnapshotCard({ label, loading, s }: { label: string; loading: boolean; s: Summary | null }) {
+function SnapshotCard({ label, loading, s, includeCash, includeHourly, includeTourney, hourlyRate }: { label: string; loading: boolean; s: Summary | null; includeCash: boolean; includeHourly: boolean; includeTourney: boolean; hourlyRate: number }) {
   return (
     <div className="rounded-xl border border-emerald-200/60 bg-white/70 p-3 shadow-sm">
       <div className="text-xs text-slate-600">{label}</div>
       {loading ? (
         <div className="mt-1 h-6 w-28 animate-pulse rounded bg-slate-200/60" />
       ) : s ? (
-        <div className="mt-0.5 text-sm">
-          <div className="font-medium text-slate-900">{money(s.total)}</div>
-          <div className="text-slate-600">${num(s.hourly)} / h • ${num(s.perDown)} / down</div>
-        </div>
+        (() => {
+          const hours = s.hours || 0;
+          const total = (includeCash ? s.total : 0) + (includeHourly ? hourlyRate * hours : 0);
+          const perHour = hours > 0 ? total / hours : 0;
+          return (
+            <div className="mt-0.5 text-sm">
+              <div className="font-medium text-slate-900">Total - {money(total)}</div>
+              <div className="text-slate-600">({`$${num(perHour)}/h`})</div>
+            </div>
+          );
+        })()
+        
       ) : (
         <div className="mt-0.5 text-sm text-slate-500">No data</div>
       )}
@@ -201,20 +255,26 @@ function SnapshotCard({ label, loading, s }: { label: string; loading: boolean; 
   );
 }
 
-function Pill({ label, loading, s }: { label: string; loading: boolean; s: Summary | null }) {
+function Pill({ label, loading, s, includeCash, includeHourly, includeTourney, hourlyRate }: { label: string; loading: boolean; s: Summary | null; includeCash: boolean; includeHourly: boolean; includeTourney: boolean; hourlyRate: number }) {
   return (
     <div className="flex items-center justify-between rounded-full border border-emerald-300/60 bg-white/80 px-3 py-2 shadow-sm">
       <div className="text-xs font-medium text-emerald-800">{label}</div>
       {loading ? (
         <div className="ml-2 h-4 w-24 animate-pulse rounded bg-slate-200/70" />
       ) : s ? (
-        <div className="ml-2 truncate text-sm text-slate-800">
-          <span className="font-semibold">{money(s.total)}</span>
-          <span className="mx-2 text-slate-400">•</span>
-          <span>${num(s.hourly)} / h</span>
-          <span className="mx-2 text-slate-400">•</span>
-          <span>${num(s.perDown)} / d</span>
-        </div>
+        (() => {
+          const hours = s.hours || 0;
+          const total = (includeCash ? s.total : 0) + (includeHourly ? hourlyRate * hours : 0);
+          const perHour = hours > 0 ? total / hours : 0;
+          return (
+            <div className="ml-2 truncate text-sm text-slate-800">
+              <span className="font-semibold">Total - {money(total)}</span>
+              <span className="mx-2 text-slate-400">•</span>
+              <span>({`$${num(perHour)}/h`})</span>
+            </div>
+          );
+        })()
+        
       ) : (
         <div className="ml-2 text-sm text-slate-500">No data</div>
       )}

@@ -203,7 +203,8 @@ export default function NewShiftForm({ initialDate }: { initialDate?: string }) 
   const hourlyRate = useMemo(() => parseNum(hourlyRateStr), [hourlyRateStr]);
   const tournamentTokes = includeTourney ? Math.max(0, tourneyDowns * tourneyRate) : 0;
   const totalForHourly = tokesCash + (includeHourly ? hourlyRate * hours : 0) + tournamentTokes;
-  const effectivePerHour = hours > 0 ? totalForHourly / hours : 0;
+  const hoursForCalc = hours > 0 ? hours : downs > 0 ? downs * 0.5 : 0; // 1 down = 0.5 hours fallback
+  const effectivePerHour = hoursForCalc > 0 ? totalForHourly / hoursForCalc : 0;
   const perTDown = includeTourney && tourneyDowns > 0 ? tournamentTokes / tourneyDowns : 0;
 
   return (
