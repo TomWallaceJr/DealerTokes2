@@ -21,7 +21,7 @@ function parseLocalYmd(ymd: string) {
   return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
 }
 
-// ---------- numeric UX helpers (match ShiftForm) ----------
+// ---------- numeric UX helpers (match NewShiftForm) ----------
 const ceilQuarter = (n: number) => Math.ceil(n * 4) / 4;
 const parseNum = (v: string) => {
   const n = Number(v);

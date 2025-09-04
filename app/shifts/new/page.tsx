@@ -2,7 +2,7 @@
 // File: /app/shifts/new/page.tsx
 // Purpose: Robust to Next 14/15 searchParams (object or Promise), passes initialDate
 // ============================================================================
-import ShiftForm from '@/components/ShiftForm';
+import NewShiftForm from '@/components/NewShiftForm';
 import { authOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
@@ -24,7 +24,7 @@ export default async function NewShiftPage(props: { searchParams?: SP | Promise<
 
   return (
     <main className="space-y-4">
-      <ShiftForm initialDate={initialDate} />
+      <NewShiftForm initialDate={initialDate} />
     </main>
   );
 }
