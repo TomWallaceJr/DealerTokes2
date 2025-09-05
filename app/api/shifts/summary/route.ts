@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
 
     let total = 0,
       tournamentTotal = 0,
+      tournamentDownsTotal = 0,
       hours = 0,
       downs = 0,
       wageTotal = 0,
@@ -97,6 +98,7 @@ export async function GET(req: NextRequest) {
 
       total += cash;
       tournamentTotal += tCash;
+      tournamentDownsTotal += tDowns;
       hours += effectiveHours;
       downs += d;
       wageTotal += h * hr;
@@ -105,8 +107,8 @@ export async function GET(req: NextRequest) {
     const hourly = hours > 0 ? total / hours : 0;
     const perDown = downs > 0 ? total / downs : 0;
 
-    return NextResponse.json({ total, tournamentTotal, wageTotal, hours, downs, hourly, perDown, count });
+    return NextResponse.json({ total, tournamentTotal, tournamentDownsTotal, wageTotal, hours, downs, hourly, perDown, count });
   } catch {
-    return NextResponse.json({ total: 0, tournamentTotal: 0, wageTotal: 0, hours: 0, downs: 0, hourly: 0, perDown: 0, count: 0 });
+    return NextResponse.json({ total: 0, tournamentTotal: 0, tournamentDownsTotal: 0, wageTotal: 0, hours: 0, downs: 0, hourly: 0, perDown: 0, count: 0 });
   }
 }

@@ -81,6 +81,8 @@ export async function GET(req: _NextRequest) {
       hours: true,
       downs: true,
       tokesCash: true,
+      tournamentDowns: true,
+      tournamentRate: true,
       notes: true,
     },
   });
@@ -98,6 +100,8 @@ export async function GET(req: _NextRequest) {
     hours: r.hours,
     downs: r.downs,
     tokesCash: r.tokesCash ?? 0,
+    tournamentDowns: r.tournamentDowns ?? 0,
+    tournamentRate: r.tournamentRate ?? 0,
     notes: r.notes,
   }));
 

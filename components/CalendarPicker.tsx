@@ -11,7 +11,13 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import Hideable from './Hideable';
 
-type Shift = { id: string; date: string; tokesCash: number };
+type Shift = {
+  id: string;
+  date: string;
+  tokesCash: number;
+  tournamentDowns?: number;
+  tournamentRate?: number;
+};
 
 type PageResp = {
   items: Shift[];
@@ -70,6 +76,8 @@ function normalizeItems(json: any): Shift[] {
       id: String(s.id),
       date: String(s.date).slice(0, 10),
       tokesCash: Number(s.tokesCash ?? 0),
+      tournamentDowns: Number(s.tournamentDowns ?? 0),
+      tournamentRate: Number(s.tournamentRate ?? 0),
     }));
   }
   // Fallback: API returned array of rows
@@ -78,6 +86,8 @@ function normalizeItems(json: any): Shift[] {
       id: String(s.id),
       date: String(s.date).slice(0, 10),
       tokesCash: Number(s.tokesCash ?? 0),
+      tournamentDowns: Number(s.tournamentDowns ?? 0),
+      tournamentRate: Number(s.tournamentRate ?? 0),
     }));
   }
   return [];
@@ -230,23 +240,47 @@ export default function CalendarPicker({ initialMonth, onPick }: CalendarPickerP
               const key = ymdLocal(d);
               const cash = cashByDay[key] ?? 0;
               const hasData = cash > 0;
+              const dayShifts = shiftsByDay[key] || [];
+              const hasTourneyDowns = dayShifts.some((s) => (s.tournamentDowns ?? 0) > 0);
+              const anyRateZero = dayShifts.some((s) => (s.tournamentRate ?? 0) <= 0);
+              const anyRateSet = dayShifts.some((s) => (s.tournamentRate ?? 0) > 0);
+              const anyDownsZero = dayShifts.some((s) => (s.tournamentDowns ?? 0) <= 0);
+              // Attention if: downs logged but rate missing; or rate logged but downs missing
+              const needsTourneyRate = (hasTourneyDowns && anyRateZero) || (anyRateSet && anyDownsZero);
+              const tooltip = [
+                hasData ? `${money(cash)}` : '',
+                needsTourneyRate
+                  ? hasTourneyDowns && anyRateZero
+                    ? 'Tournament $/down missing — tap to edit'
+                    : 'Tournament downs missing — tap to edit'
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' • ');
               return (
                 <button
                   key={key}
                   type="button"
                   onClick={() => handlePick(key)}
                   aria-label={`${key}${hasData ? `, ${money(cash)}` : ''}`}
+                  title={tooltip || undefined}
                   className={[
                     'relative rounded-xl border border-slate-200/70 bg-white/80 shadow-sm backdrop-blur transition',
-                    'hover:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none',
+                    'hover:bg-white focus:outline-none',
                     isToday(d) ? 'ring-2 ring-emerald-500' : '',
                     inCurrentMonth(d) ? '' : 'opacity-60',
+                    needsTourneyRate ? 'border-rose-400 ring-2 ring-rose-400' : 'focus:ring-2 focus:ring-emerald-500',
                   ].join(' ')}
                 >
                   <div className="aspect-square p-1.5 sm:p-2 md:p-2.5">
                     <div className="absolute top-1 left-1 text-[10px] font-medium text-slate-500 sm:top-1.5 sm:left-1.5 sm:text-[11px] md:top-2 md:left-2 md:text-[12px]">
                       {d.getDate()}
                     </div>
+                    {needsTourneyRate ? (
+                      <div className="pointer-events-none absolute top-1 right-1 sm:top-1.5 sm:right-1.5 md:top-2 md:right-2">
+                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold leading-none text-white ring-1 ring-rose-300">!</span>
+                      </div>
+                    ) : null}
                     {hasData ? (
                       <>
                         <div className="absolute inset-x-1 bottom-1 flex items-end justify-center sm:hidden">

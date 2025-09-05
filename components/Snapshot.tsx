@@ -7,6 +7,7 @@ import { money, num } from '@/lib/format';
 type Summary = {
   total: number; // cash tokes
   tournamentTotal?: number; // derived on server: tournamentDowns * tournamentRate
+  tournamentDownsTotal?: number; // total tournament downs in range
   wageTotal?: number; // derived on server: sum(hours * hourlyRate)
   hours: number;
   downs: number;
@@ -248,7 +249,21 @@ function SnapshotCard({ label, loading, s, includeCash, includeHourly, includeTo
           return (
             <div className="mt-0.5 text-sm">
               <div className="font-medium text-slate-900">Total - {money(total)}</div>
-              <div className="text-slate-600">({`$${num(perHour)}/h`})</div>
+              <div className="text-slate-600">
+                ({`$${num(perHour)}/h`})
+                {includeTourney ? (
+                  (() => {
+                    const td = s.tournamentDownsTotal ?? 0;
+                    const avgTd = td > 0 ? (s.tournamentTotal ?? 0) / td : 0;
+                    return (
+                      <>
+                        <span className="mx-2 text-slate-400">•</span>
+                        <span>Tourney ${num(avgTd)}/td</span>
+                      </>
+                    );
+                  })()
+                ) : null}
+              </div>
             </div>
           );
         })()
@@ -279,6 +294,18 @@ function Pill({ label, loading, s, includeCash, includeHourly, includeTourney, h
               <span className="font-semibold">Total - {money(total)}</span>
               <span className="mx-2 text-slate-400">•</span>
               <span>({`$${num(perHour)}/h`})</span>
+              {includeTourney ? (
+                (() => {
+                  const td = s.tournamentDownsTotal ?? 0;
+                  const avgTd = td > 0 ? (s.tournamentTotal ?? 0) / td : 0;
+                  return (
+                    <>
+                      <span className="mx-2 text-slate-400">•</span>
+                      <span>Tourney ${num(avgTd)}/td</span>
+                    </>
+                  );
+                })()
+              ) : null}
             </div>
           );
         })()

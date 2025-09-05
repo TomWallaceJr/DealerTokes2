@@ -149,7 +149,10 @@ export default function NewShiftForm({ initialDate }: { initialDate?: string }) 
         try {
           const from = date;
           const to = nextDayYmd(date);
-          const r = await fetch(`/api/shifts?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=1`, { cache: 'no-store' });
+          const r = await fetch(
+            `/api/shifts?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=1`,
+            { cache: 'no-store' },
+          );
           if (r.ok) {
             const j = await r.json();
             const id = j?.items?.[0]?.id as string | undefined;
@@ -257,7 +260,7 @@ export default function NewShiftForm({ initialDate }: { initialDate?: string }) 
             {conflictId ? (
               <button
                 type="button"
-                className="underline decoration-rose-400 underline-offset-2 text-rose-700 hover:text-rose-800"
+                className="text-rose-700 underline decoration-rose-400 underline-offset-2 hover:text-rose-800"
                 onClick={() => router.push(`/shifts/${conflictId}`)}
               >
                 Edit existing shift
@@ -274,9 +277,13 @@ export default function NewShiftForm({ initialDate }: { initialDate?: string }) 
               </div>
               {/* Line 2: Total - TotalMade • ($/h) */}
               <div className="flex items-center gap-2 text-[12px]">
-                <span className="font-semibold text-slate-900">Total - {money(totalForHourly)}</span>
+                <span className="font-semibold text-slate-900">
+                  Total - {money(totalForHourly)}
+                </span>
                 <span className="text-slate-400">•</span>
-                <span className="font-medium text-slate-800">({`$${num(effectivePerHour)}/h`})</span>
+                <span className="font-medium text-slate-800">
+                  ({`$${num(effectivePerHour)}/h`})
+                </span>
               </div>
               {/* Line 3: Cash Tokes - Cashout • $/cd */}
               <div className="flex items-center gap-2 text-[12px]">
@@ -287,7 +294,9 @@ export default function NewShiftForm({ initialDate }: { initialDate?: string }) 
               {/* Line 4: Tournament Tokes - Tournament total • $/td */}
               {includeTourney ? (
                 <div className="flex items-center gap-2 text-[12px]">
-                  <span className="font-medium text-slate-800">Tournament Tokes - {money(tournamentTokes)}</span>
+                  <span className="font-medium text-slate-800">
+                    Tournament Tokes - {money(tournamentTokes)}
+                  </span>
                   <span className="text-slate-400">•</span>
                   <span className="font-medium text-slate-800">{`$${num(perTDown)}/td`}</span>
                 </div>
@@ -300,11 +309,17 @@ export default function NewShiftForm({ initialDate }: { initialDate?: string }) 
                 <div className="flex items-center gap-3 text-[14px] whitespace-nowrap">
                   <span className="text-slate-600">{resultsLabel}</span>
                   <span className="text-slate-400">•</span>
-                  <span className="font-semibold text-slate-900">Total - {money(totalForHourly)}</span>
+                  <span className="font-semibold text-slate-900">
+                    Total - {money(totalForHourly)}
+                  </span>
                   <span className="text-slate-400">•</span>
-                  <span className="font-medium text-slate-800">({`$${num(effectivePerHour)}/h`})</span>
+                  <span className="font-medium text-slate-800">
+                    ({`$${num(effectivePerHour)}/h`})
+                  </span>
                   <span className="text-slate-400">•</span>
-                  <span className="font-medium text-slate-800">Cash Tokes - {money(tokesCash)}</span>
+                  <span className="font-medium text-slate-800">
+                    Cash Tokes - {money(tokesCash)}
+                  </span>
                   <span className="text-slate-400">•</span>
                   <span className="font-medium text-slate-800">{`$${num(perDown)}/cd`}</span>
                 </div>
@@ -316,19 +331,27 @@ export default function NewShiftForm({ initialDate }: { initialDate?: string }) 
                   </div>
                   {/* Line 2: Total - TotalMade • ($/h) */}
                   <div className="flex items-center gap-3">
-                    <span className="font-semibold text-slate-900">Total - {money(totalForHourly)}</span>
+                    <span className="font-semibold text-slate-900">
+                      Total - {money(totalForHourly)}
+                    </span>
                     <span className="text-slate-400">•</span>
-                    <span className="font-medium text-slate-800">({`$${num(effectivePerHour)}/h`})</span>
+                    <span className="font-medium text-slate-800">
+                      ({`$${num(effectivePerHour)}/h`})
+                    </span>
                   </div>
                   {/* Line 3: Cash Tokes - Cashout • $/d */}
                   <div className="flex items-center gap-3">
-                    <span className="font-medium text-slate-800">Cash Tokes - {money(tokesCash)}</span>
+                    <span className="font-medium text-slate-800">
+                      Cash Tokes - {money(tokesCash)}
+                    </span>
                     <span className="text-slate-400">•</span>
                     <span className="font-medium text-slate-800">{`$${num(perDown)}/d`}</span>
                   </div>
                   {/* Line 4: Tournament Tokes - Tournament total • $/td */}
                   <div className="flex items-center gap-3">
-                    <span className="font-medium text-slate-800">Tournament Tokes - {money(tournamentTokes)}</span>
+                    <span className="font-medium text-slate-800">
+                      Tournament Tokes - {money(tournamentTokes)}
+                    </span>
                     <span className="text-slate-400">•</span>
                     <span className="font-medium text-slate-800">{`$${num(perTDown)}/td`}</span>
                   </div>
@@ -457,7 +480,7 @@ export default function NewShiftForm({ initialDate }: { initialDate?: string }) 
       {includeTourney && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
-            <label className="text-xs text-slate-600">Tournament Downs</label>
+            <label className="text-xs text-slate-600">Tournament Downs Dealt</label>
             <input
               className="input"
               type="text"
