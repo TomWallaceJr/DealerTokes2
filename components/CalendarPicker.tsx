@@ -15,6 +15,8 @@ type Shift = {
   id: string;
   date: string;
   tokesCash: number;
+  hours?: number;
+  hourlyRate?: number;
   tournamentDowns?: number;
   tournamentRate?: number;
 };
@@ -76,6 +78,8 @@ function normalizeItems(json: any): Shift[] {
       id: String(s.id),
       date: String(s.date).slice(0, 10),
       tokesCash: Number(s.tokesCash ?? 0),
+      hours: Number(s.hours ?? 0),
+      hourlyRate: Number(s.hourlyRate ?? 0),
       tournamentDowns: Number(s.tournamentDowns ?? 0),
       tournamentRate: Number(s.tournamentRate ?? 0),
     }));
@@ -86,6 +90,8 @@ function normalizeItems(json: any): Shift[] {
       id: String(s.id),
       date: String(s.date).slice(0, 10),
       tokesCash: Number(s.tokesCash ?? 0),
+      hours: Number(s.hours ?? 0),
+      hourlyRate: Number(s.hourlyRate ?? 0),
       tournamentDowns: Number(s.tournamentDowns ?? 0),
       tournamentRate: Number(s.tournamentRate ?? 0),
     }));
@@ -112,6 +118,34 @@ export default function CalendarPicker({ initialMonth, onPick }: CalendarPickerP
   const [shiftsByDay, setShiftsByDay] = useState<Record<string, Shift[]>>({});
   const [loading, setLoading] = useState(false);
 
+  // Snapshot toggles read from localStorage
+  const [toggles, setToggles] = useState<{ cash: boolean; hourly: boolean; tourney: boolean }>(
+    { cash: true, hourly: true, tourney: false },
+  );
+
+  function readToggles() {
+    try {
+      const cash = localStorage.getItem('snapshot:includeCash');
+      const hourly = localStorage.getItem('snapshot:includeHourly');
+      const tourney = localStorage.getItem('snapshot:includeTourney');
+      return {
+        cash: cash ? cash !== '0' : true,
+        hourly: hourly ? hourly !== '0' : true,
+        tourney: tourney ? tourney !== '0' : false,
+      };
+    } catch {
+      return { cash: true, hourly: true, tourney: false };
+    }
+  }
+
+  // listen for toggle changes from Snapshot
+  useEffect(() => {
+    const fn = () => setToggles(readToggles());
+    fn();
+    window.addEventListener('snapshot-toggles-changed', fn as any);
+    return () => window.removeEventListener('snapshot-toggles-changed', fn as any);
+  }, []);
+
   // 6-row grid (Mon–Sun)
   const gridStart = useMemo(() => mondayOf(startOfMonth(cursor)), [cursor]);
   const gridDays = useMemo(
@@ -131,16 +165,22 @@ export default function CalendarPicker({ initialMonth, onPick }: CalendarPickerP
         const raw = await res.json();
         const items = normalizeItems(raw);
 
-        const cash: Record<string, number> = {};
+        const totals: Record<string, number> = {};
         const byDay: Record<string, Shift[]> = {};
         for (const s of items) {
           const k = (s.date || '').slice(0, 10);
           if (!k) continue;
-          cash[k] = (cash[k] ?? 0) + (s.tokesCash ?? 0);
+          const valCash = toggles.cash ? Number(s.tokesCash ?? 0) : 0;
+          const valHourly = toggles.hourly ? Number(s.hours ?? 0) * Number(s.hourlyRate ?? 0) : 0;
+          const valT = toggles.tourney
+            ? Math.max(0, Number(s.tournamentDowns ?? 0) * Number(s.tournamentRate ?? 0))
+            : 0;
+          const sum = valCash + valHourly + valT;
+          totals[k] = (totals[k] ?? 0) + sum;
           (byDay[k] ||= []).push(s);
         }
 
-        setCashByDay(cash);
+        setCashByDay(totals);
         setShiftsByDay(byDay);
       } catch {
         setCashByDay({});
@@ -149,7 +189,7 @@ export default function CalendarPicker({ initialMonth, onPick }: CalendarPickerP
         setLoading(false);
       }
     })();
-  }, [cursor]);
+  }, [cursor, toggles]);
 
   const isToday = (d: Date) =>
     d.getDate() === today.getDate() &&
@@ -277,8 +317,8 @@ export default function CalendarPicker({ initialMonth, onPick }: CalendarPickerP
                       {d.getDate()}
                     </div>
                     {needsTourneyRate ? (
-                      <div className="pointer-events-none absolute top-1 right-1 sm:top-1.5 sm:right-1.5 md:top-2 md:right-2">
-                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold leading-none text-white ring-1 ring-rose-300">!</span>
+                      <div className="pointer-events-none absolute -top-1 right-1 z-10 sm:-top-0.5 sm:right-1.5 md:top-0 md:right-2">
+                        <span className="inline-flex h-2.5 w-2.5 items-center justify-center rounded-full bg-rose-500 text-[7px] font-bold leading-none text-white ring-1 ring-rose-300 sm:h-3.5 sm:w-3.5 sm:text-[8px] md:h-4 md:w-4 md:text-[10px]">!</span>
                       </div>
                     ) : null}
                     {hasData ? (

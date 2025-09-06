@@ -28,6 +28,9 @@ export default async function EditShiftPage({ params }: { params: Promise<{ id: 
       hours: true, // ✅ hours only
       downs: true,
       tokesCash: true,
+      hourlyRate: true,
+      tournamentDowns: true,
+      tournamentRate: true,
       notes: true,
       // removed: clockIn, clockOut
     },
@@ -42,6 +45,9 @@ export default async function EditShiftPage({ params }: { params: Promise<{ id: 
     hours: Number(row.hours ?? 0), // ✅ ensure number (handles Decimal)
     downs: Number(row.downs ?? 0),
     tokesCash: row.tokesCash,
+    hourlyRate: Number(row.hourlyRate ?? 0),
+    tournamentDowns: Number(row.tournamentDowns ?? 0),
+    tournamentRate: Number(row.tournamentRate ?? 0),
     notes: row.notes ?? '',
   };
 

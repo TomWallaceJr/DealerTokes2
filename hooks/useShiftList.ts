@@ -13,6 +13,10 @@ export type Shift = {
   tokesCash: number;
   downs: number;
   notes?: string | null;
+  // optional fields for completeness checks and derived displays
+  tournamentDowns?: number;
+  tournamentRate?: number;
+  hourlyRate?: number;
 };
 
 type PageResp = {
@@ -116,4 +120,3 @@ export function useShiftList() {
 
   return { items: items ?? [], hasMore, loading, loadingMore, error, deletingId, refresh, loadMore, remove };
 }
-

@@ -14,6 +14,9 @@ type ShiftForEdit = {
   downs: number;
   tokesCash: number; // whole dollars
   notes: string;
+  hourlyRate?: number;
+  tournamentDowns?: number;
+  tournamentRate?: number;
 };
 
 function parseLocalYmd(ymd: string) {
@@ -61,6 +64,21 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
   const perHour = hours > 0 ? tokesCash / hours : 0;
   const perDown = downs > 0 ? tokesCash / downs : 0;
 
+  // Optional sections toggles (prefill from existing data)
+  const [includeHourly, setIncludeHourly] = useState<boolean>((shift.hourlyRate ?? 0) > 0);
+  const [includeTourney, setIncludeTourney] = useState<boolean>((shift.tournamentDowns ?? 0) > 0);
+
+  // New fields: Hourly rate and tournament metrics (strings for inputs)
+  const [hourlyRateStr, setHourlyRateStr] = useState<string>(
+    fmtNum(Number(shift.hourlyRate ?? 0)),
+  );
+  const [tourneyDownsStr, setTourneyDownsStr] = useState<string>(
+    fmtNum(Number(shift.tournamentDowns ?? 0)),
+  );
+  const [tourneyRateStr, setTourneyRateStr] = useState<string>(
+    fmtNum(Number(shift.tournamentRate ?? 0)),
+  );
+
   // rooms for datalist
   useEffect(() => {
     (async () => {
@@ -83,7 +101,7 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
     }
     setSaving(true);
     try {
-      const body = {
+      const body: any = {
         date,
         casino: casino.trim(),
         hours: ceilQuarter(hours),
@@ -91,6 +109,11 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
         tokesCash, // whole dollars
         notes: notes || undefined,
       };
+
+      // Map optional fields
+      body.hourlyRate = includeHourly ? Math.max(0, parseNum(hourlyRateStr)) : 0;
+      body.tournamentDowns = includeTourney ? Math.max(0, parseNum(tourneyDownsStr)) : 0;
+      body.tournamentRate = includeTourney ? Math.max(0, parseNum(tourneyRateStr)) : 0;
 
       const res = await fetch(`/api/shifts/${shift.id}`, {
         method: 'PATCH',
@@ -111,7 +134,7 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
         localStorage.setItem('lastRoom', body.casino);
       } catch {}
 
-      router.push('/shifts');
+      router.push('/');
       router.refresh();
     } catch (e: any) {
       setError(e?.message || 'Failed to save changes.');
@@ -127,7 +150,7 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
     try {
       const res = await fetch(`/api/shifts/${shift.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
-      router.push('/shifts');
+      router.push('/');
       router.refresh();
     } catch (e: any) {
       setError(e?.message || 'Failed to delete.');
@@ -197,38 +220,81 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
         </div>
       </div>
 
-      {/* Results bubble — 4-line, consistent layout */}
+      {/* Options (match NewShiftForm position) */}
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+            checked={includeHourly}
+            onChange={(e) => setIncludeHourly(e.target.checked)}
+          />
+          Include Hourly Rate
+        </label>
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+            checked={includeTourney}
+            onChange={(e) => setIncludeTourney(e.target.checked)}
+          />
+          Include Tournament Downs
+        </label>
+      </div>
+
+      {/* Results bubble — mirror NewShiftForm layout */}
       <div className="m-3 mt-0 rounded-2xl border border-emerald-300/70 bg-gradient-to-br from-emerald-50 to-teal-50 p-3 shadow-sm sm:m-5 sm:p-4">
         {error ? (
           <span className="text-rose-600">{error}</span>
         ) : (
-          <div className="flex flex-col gap-1.5">
-            {/* line 1: Date • Casino */}
-            <div className="flex items-center gap-2 text-[13px] text-slate-800 sm:text-sm">
-              <span className="truncate">{dayLabel}</span>
-              <span className="text-slate-300">•</span>
-              <span className="truncate">{casino || 'Room'}</span>
-            </div>
+          (() => {
+            const tourneyDowns = parseNum(tourneyDownsStr);
+            const tourneyRate = parseNum(tourneyRateStr);
+            const hourlyRate = parseNum(hourlyRateStr);
+            const tournamentTokes = includeTourney ? Math.max(0, tourneyDowns * tourneyRate) : 0;
+            const totalForHourly = tokesCash + (includeHourly ? hourlyRate * hours : 0) + tournamentTokes;
+            const hoursForCalc = hours > 0 ? hours : downs > 0 ? downs * 0.5 : 0;
+            const effectivePerHour = hoursForCalc > 0 ? totalForHourly / hoursForCalc : 0;
+            const perTDown = includeTourney && tourneyDowns > 0 ? tournamentTokes / tourneyDowns : 0;
+            return (
+              <div className="flex flex-col gap-1.5">
+                {/* line 1: Date • Casino */}
+                <div className="flex items-center gap-2 text-[13px] text-slate-800 sm:text-sm">
+                  <span className="truncate">{dayLabel}</span>
+                  <span className="text-slate-300">•</span>
+                  <span className="truncate">{casino || 'Room'}</span>
+                </div>
 
-            {/* line 2: Total cash • $/h */}
-            <div className="flex items-center gap-2 text-[13px] text-slate-800 sm:text-sm">
-              <span>{money(total)}</span>
-              <span className="text-slate-300">•</span>
-              <span>${num(hourly)} / h</span>
-            </div>
+                {/* line 2: Total - TotalMade • ($/h) */}
+                <div className="flex items-center gap-2 text-[13px] text-slate-800 sm:text-sm">
+                  <span className="font-semibold">Total - {money(totalForHourly)}</span>
+                  <span className="text-slate-300">•</span>
+                  <span>({`$${num(effectivePerHour)}/h`})</span>
+                </div>
 
-            {/* line 3: Total downs • $/d */}
-            <div className="flex items-center gap-2 text-[13px] text-slate-800 sm:text-sm">
-              <span>{num(downs)} downs</span>
-              <span className="text-slate-300">•</span>
-              <span>${num(pDown)} / d</span>
-            </div>
+                {/* line 3: Cash Tokes - Cashout • $/cd */}
+                <div className="flex items-center gap-2 text-[13px] text-slate-800 sm:text-sm">
+                  <span>Cash Tokes - {money(tokesCash)}</span>
+                  <span className="text-slate-300">•</span>
+                  <span>{`$${num(perDown)}/cd`}</span>
+                </div>
 
-            {/* line 4: Notes */}
-            {notes?.trim() ? (
-              <div className="text-[13px] text-slate-800 sm:text-sm">{notes}</div>
-            ) : null}
-          </div>
+                {/* line 4: Tournament Tokes - Tournament total • $/td */}
+                {includeTourney ? (
+                  <div className="flex items-center gap-2 text-[13px] text-slate-800 sm:text-sm">
+                    <span>Tournament Tokes - {money(tournamentTokes)}</span>
+                    <span className="text-slate-300">•</span>
+                    <span>{`$${num(perTDown)}/td`}</span>
+                  </div>
+                ) : null}
+
+                {/* Notes */}
+                {notes?.trim() ? (
+                  <div className="text-[13px] text-slate-800 sm:text-sm">{notes}</div>
+                ) : null}
+              </div>
+            );
+          })()
         )}
       </div>
 
@@ -260,6 +326,33 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
           </datalist>
         </div>
       </div>
+
+      
+
+      {/* Hourly Rate (conditional) */}
+      {includeHourly && (
+        <div>
+          <label className="text-xs text-slate-600">Hourly Rate</label>
+          <div className="relative">
+            <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400">
+              $
+            </span>
+            <input
+              className="input w-28 pl-6"
+              type="text"
+              inputMode="decimal"
+              value={hourlyRateStr}
+              onFocus={() => hourlyRateStr === '0' && setHourlyRateStr('')}
+              onChange={(e) => setHourlyRateStr(cleanDecimal(e.target.value))}
+              onBlur={(e) => {
+                const n = parseNum(e.target.value);
+                setHourlyRateStr(fmtNum(Math.max(0, n)));
+              }}
+              placeholder="0"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Hours / Downs / Cashout */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -321,6 +414,50 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
         </div>
       </div>
 
+      {/* Tournament fields (conditional) */}
+      {includeTourney && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <label className="text-xs text-slate-600">Tournament Downs</label>
+            <input
+              className="input"
+              type="text"
+              inputMode="decimal"
+              value={tourneyDownsStr}
+              onFocus={() => tourneyDownsStr === '0' && setTourneyDownsStr('')}
+              onChange={(e) => setTourneyDownsStr(cleanDecimal(e.target.value))}
+              onBlur={(e) => {
+                const n = parseNum(e.target.value);
+                setTourneyDownsStr(fmtNum(Math.max(0, n)));
+              }}
+              placeholder="0"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-slate-600">Tournament $/down</label>
+            <div className="relative">
+              <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400">
+                $
+              </span>
+              <input
+                className="input w-28 pl-6"
+                type="text"
+                inputMode="decimal"
+                value={tourneyRateStr}
+                onFocus={() => tourneyRateStr === '0' && setTourneyRateStr('')}
+                onChange={(e) => setTourneyRateStr(cleanDecimal(e.target.value))}
+                onBlur={(e) => {
+                  const n = parseNum(e.target.value);
+                  setTourneyRateStr(fmtNum(Math.max(0, n)));
+                }}
+                placeholder="0"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Notes */}
       <div>
         <label className="text-xs text-slate-600">Notes</label>
@@ -342,7 +479,7 @@ export default function EditShiftForm({ shift }: { shift: ShiftForEdit }) {
           <button
             className="btn"
             type="button"
-            onClick={() => router.push('/shifts')}
+            onClick={() => router.push('/')}
             disabled={saving || deleting}
           >
             Cancel
